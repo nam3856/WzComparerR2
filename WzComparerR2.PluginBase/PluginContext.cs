@@ -88,6 +88,11 @@ namespace WzComparerR2.PluginBase
             get { return this.contextProvider.DefaultTooltipWindow; }
         }
 
+        public void ShowImageViewerAnimation(string pictureName, IList<BitmapOrigin> frames, IList<int> delays)
+        {
+            this.contextProvider.ShowImageViewerAnimation(pictureName, frames, delays);
+        }
+
         private SuperTabControl SuperTabControl1
         {
             get

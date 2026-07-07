@@ -20,6 +20,8 @@ namespace WzComparerR2.PluginBase
         StringLinker DefaultStringLinker { get; }
         AlphaForm DefaultTooltipWindow { get; }
 
+        void ShowImageViewerAnimation(string pictureName, IList<BitmapOrigin> frames, IList<int> delays);
+
         event EventHandler<WzNodeEventArgs> SelectedNode1Changed;
         event EventHandler<WzNodeEventArgs> SelectedNode2Changed;
         event EventHandler<WzNodeEventArgs> SelectedNode3Changed;

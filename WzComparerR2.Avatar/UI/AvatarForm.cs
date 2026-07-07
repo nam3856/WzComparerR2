@@ -871,7 +871,7 @@ namespace WzComparerR2.Avatar.UI
                 if (part != null)
                 {
                     var btn = new AvatarPartButtonItem(part.ID.Value, part.IsMixing ? part.MixColor : (int?)null, part.IsMixing ? part.MixOpacity : (int?)null, part.HasWhiteMixColor,
-                        part.PrismData);
+                        part.PrismData, part.EffectNode != null);
                     this.SetButtonText(part, btn);
                     if (part == avatar.Body || part == avatar.Head || part == avatar.Face || part == avatar.Hair)
                     {
@@ -890,6 +890,7 @@ namespace WzComparerR2.Avatar.UI
                     btn.btnItemDel.Click += BtnItemDel_Click;
                     btn.btnItemReset.Click += BtnItemReset_Click;
                     btn.btnChangePrismIndex.Click += BtnChangePrismIndex_Click;
+                    btn.btnViewPrismEffect.Click += BtnViewPrismEffect_Click;
                     btn.chkShowEffect.Click += ChkShowEffect_Click;
                     btn.CheckedChanged += Btn_CheckedChanged;
                     btn.rdoMixColor0.CheckedChanged += RadioMixColor0_CheckedChanged;
@@ -982,6 +983,200 @@ namespace WzComparerR2.Avatar.UI
                 btn.SetPrism(part.ID ?? 0);
 
                 this.isUpdatingBtnItem = false;
+            }
+        }
+
+        private void BtnViewPrismEffect_Click(object sender, EventArgs e)
+        {
+            var btn = (sender as BaseItem).Parent as AvatarPartButtonItem;
+            var part = btn?.Tag as AvatarPart;
+            if (btn == null || part?.EffectNode == null)
+            {
+                return;
+            }
+
+            PrismDataCollection.PrismDataType pidx = (PrismDataCollection.PrismDataType)btn.PrismIndex;
+            PrismData prismData = btn.PrismData.Get(pidx);
+
+            string actionName = (this.cmbActionBody.SelectedItem as ComboItem)?.Text ?? this.avatar.ActionName;
+            Wz_Node actionNode = FindPrismEffectFrameContainer(part.EffectNode, actionName);
+            if (actionNode == null)
+            {
+                ToastNotification.Show(this, "표시할 이펙트 프레임을 찾을 수 없습니다.", null, 3000, eToastGlowColor.Red, eToastPosition.TopCenter);
+                return;
+            }
+
+            List<BitmapOrigin> frames = null;
+            try
+            {
+                if (!TryLoadPrismEffectPreviewFrames(actionNode, prismData, out frames, out var delays))
+                {
+                    ToastNotification.Show(this, "표시할 이펙트 프레임을 찾을 수 없습니다.", null, 3000, eToastGlowColor.Red, eToastPosition.TopCenter);
+                    return;
+                }
+
+                this.PluginEntry.Context.ShowImageViewerAnimation($"{part.ID}_prism_effect", frames, delays);
+                frames = null;
+            }
+            catch (Exception ex)
+            {
+                ToastNotification.Show(this, "프리즘 이펙트 표시 실패: " + ex.Message, null, 4000, eToastGlowColor.Red, eToastPosition.TopCenter);
+            }
+            finally
+            {
+                DisposeBitmapOrigins(frames);
+            }
+        }
+
+        private static Wz_Node FindPrismEffectFrameContainer(Wz_Node effectNode, string actionName)
+        {
+            if (effectNode == null)
+            {
+                return null;
+            }
+
+            foreach (Wz_Node candidate in EnumeratePrismEffectFrameCandidates(effectNode, actionName))
+            {
+                Wz_Node resolvedCandidate = ResolvePrismEffectNode(candidate);
+                if (HasPrismEffectFrames(resolvedCandidate))
+                {
+                    return resolvedCandidate;
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<Wz_Node> EnumeratePrismEffectFrameCandidates(Wz_Node effectNode, string actionName)
+        {
+            foreach (Wz_Node candidate in EnumeratePrismEffectActionCandidates(effectNode, actionName))
+            {
+                yield return candidate;
+            }
+
+            string[] layerNames = { "effect", "effect2", "0", "1" };
+            foreach (string layerName in layerNames)
+            {
+                Wz_Node layerNode = effectNode.FindNodeByPath(layerName);
+                foreach (Wz_Node candidate in EnumeratePrismEffectActionCandidates(layerNode, actionName))
+                {
+                    yield return candidate;
+                }
+            }
+        }
+
+        private static IEnumerable<Wz_Node> EnumeratePrismEffectActionCandidates(Wz_Node effectNode, string actionName)
+        {
+            if (effectNode == null)
+            {
+                yield break;
+            }
+
+            if (!string.IsNullOrEmpty(actionName))
+            {
+                yield return effectNode.FindNodeByPath(actionName);
+            }
+
+            yield return effectNode.FindNodeByPath("default");
+            yield return effectNode;
+        }
+
+        private static bool HasPrismEffectFrames(Wz_Node node)
+        {
+            if (node == null)
+            {
+                return false;
+            }
+
+            if (node.Value is Wz_Png)
+            {
+                return true;
+            }
+
+            Wz_Node firstFrameNode = ResolvePrismEffectNode(node.FindNodeByPath("0"));
+            return firstFrameNode?.Value is Wz_Png;
+        }
+
+        private static bool TryLoadPrismEffectPreviewFrames(Wz_Node actionNode, PrismData prismData, out List<BitmapOrigin> frames, out List<int> delays)
+        {
+            frames = new List<BitmapOrigin>();
+            delays = new List<int>();
+
+            if (TryAddPrismEffectPreviewFrame(actionNode, prismData, frames, delays))
+            {
+                return true;
+            }
+
+            for (int i = 0; ; i++)
+            {
+                Wz_Node frameNode = actionNode.FindNodeByPath(i.ToString());
+                if (frameNode == null)
+                {
+                    break;
+                }
+
+                if (!TryAddPrismEffectPreviewFrame(frameNode, prismData, frames, delays))
+                {
+                    break;
+                }
+            }
+
+            return frames.Count > 0;
+        }
+
+        private static bool TryAddPrismEffectPreviewFrame(Wz_Node frameNode, PrismData prismData, List<BitmapOrigin> frames, List<int> delays)
+        {
+            Wz_Node resolvedFrameNode = ResolvePrismEffectNode(frameNode);
+            if (resolvedFrameNode == null || !(resolvedFrameNode.Value is Wz_Png))
+            {
+                return false;
+            }
+
+            BitmapOrigin frame = BitmapOrigin.CreateFromNode(frameNode, PluginBase.PluginManager.FindWz, frameNode.GetNodeWzFile());
+            if (frame.Bitmap == null)
+            {
+                return false;
+            }
+
+            BitmapOrigin prismFrame = Prism.Apply(frame, prismData, true);
+            if (!object.ReferenceEquals(frame.Bitmap, prismFrame.Bitmap))
+            {
+                frame.Bitmap.Dispose();
+            }
+
+            frames.Add(prismFrame);
+            delays.Add(GetPrismEffectFrameDelay(resolvedFrameNode));
+            return true;
+        }
+
+        private static int GetPrismEffectFrameDelay(Wz_Node frameNode)
+        {
+            int delay = frameNode.FindNodeByPath("delay").GetValueEx<int>(120);
+            delay = Math.Abs(delay);
+            return delay == 0 ? 120 : delay;
+        }
+
+        private static Wz_Node ResolvePrismEffectNode(Wz_Node node)
+        {
+            if (node == null)
+            {
+                return null;
+            }
+
+            node = node.HandleFullUol(PluginBase.PluginManager.FindWz, node.GetNodeWzFile());
+            return node?.ResolveUol();
+        }
+
+        private static void DisposeBitmapOrigins(IEnumerable<BitmapOrigin> frames)
+        {
+            if (frames == null)
+            {
+                return;
+            }
+
+            foreach (BitmapOrigin frame in frames)
+            {
+                frame.Bitmap?.Dispose();
             }
         }
 

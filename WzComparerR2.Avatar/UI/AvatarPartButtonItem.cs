@@ -13,13 +13,14 @@ namespace WzComparerR2.Avatar.UI
 {
     internal partial class AvatarPartButtonItem : ButtonItem
     {
-        public AvatarPartButtonItem(int ID, int? mixColor, int? mixOpacity, bool hasWhiteMixColor, PrismDataCollection pdc)
+        public AvatarPartButtonItem(int ID, int? mixColor, int? mixOpacity, bool hasWhiteMixColor, PrismDataCollection pdc, bool canViewPrismEffect)
         {
             InitializeComponent();
             this.chkShowEffect.Name += ID.ToString();
             this.SubItems.Add(this.chkShowEffect);
             this.PrismData = pdc.Clone();
             this.PrismIndex = 0;
+            this.canViewPrismEffect = canViewPrismEffect;
             GearType type = Gear.GetGearType(ID);
             if (Gear.IsFace(type) || Gear.IsHair(type))
             {
@@ -80,6 +81,7 @@ namespace WzComparerR2.Avatar.UI
         public static readonly int[] PrismResourceIndex = new[] { 0, 1, 3, 3, 5, 5, 7 };
         public PrismDataCollection PrismData;
         public int PrismIndex;
+        private readonly bool canViewPrismEffect;
 
         public void Reset(int ID, bool hasWhiteMixColor)
         {
@@ -170,6 +172,10 @@ namespace WzComparerR2.Avatar.UI
             if (Gear.IsWeapon(type) || Gear.IsCashWeapon(type))
             {
                 this.SubItems.Add(this.btnChangePrismIndex);
+            }
+            if (this.canViewPrismEffect)
+            {
+                this.SubItems.Add(this.btnViewPrismEffect);
             }
             this.SubItems.AddRange(rdoPrismType);
             this.SubItems.Add(this.labelHue);

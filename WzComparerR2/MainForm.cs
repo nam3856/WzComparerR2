@@ -29,6 +29,7 @@ using WzComparerR2.Config;
 using WzComparerR2.Controls;
 using WzComparerR2.Encoders;
 using WzComparerR2.PluginBase;
+using WzComparerR2.Rendering;
 using WzComparerR2.WzLib;
 
 namespace WzComparerR2
@@ -4348,6 +4349,58 @@ namespace WzComparerR2
         AlphaForm PluginContextProvider.DefaultTooltipWindow
         {
             get { return this.tooltipQuickView; }
+        }
+
+        void PluginContextProvider.ShowImageViewerAnimation(string pictureName, IList<BitmapOrigin> frames, IList<int> delays)
+        {
+            if (frames == null || frames.Count <= 0)
+            {
+                return;
+            }
+
+            var frameData = new FrameAnimationData();
+            for (int i = 0; i < frames.Count; i++)
+            {
+                BitmapOrigin bitmapOrigin = frames[i];
+                if (bitmapOrigin.Bitmap == null)
+                {
+                    continue;
+                }
+
+                int delay = delays != null && i < delays.Count ? Math.Abs(delays[i]) : 120;
+                if (delay == 0)
+                {
+                    delay = 120;
+                }
+
+                try
+                {
+                    frameData.Frames.Add(new Frame(bitmapOrigin.Bitmap.ToTexture(this.pictureBoxEx1.GraphicsDevice))
+                    {
+                        Origin = new Microsoft.Xna.Framework.Point(bitmapOrigin.Origin.X, bitmapOrigin.Origin.Y),
+                        Delay = delay,
+                    });
+                }
+                finally
+                {
+                    bitmapOrigin.Bitmap.Dispose();
+                }
+            }
+
+            if (frameData.Frames.Count <= 0)
+            {
+                return;
+            }
+
+            if (this.pictureBoxEx1.IsPaused)
+            {
+                ResumePictureBox();
+            }
+
+            this.pictureBoxEx1.ShowAnimation(frameData);
+            this.pictureBoxEx1.PictureName = pictureName;
+            this.cmbItemAniNames.Items.Clear();
+            this.cmbItemSkins.Visible = false;
         }
 
         private void RegisterPluginEvents()
