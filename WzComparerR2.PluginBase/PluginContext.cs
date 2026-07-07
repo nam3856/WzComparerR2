@@ -28,6 +28,11 @@ namespace WzComparerR2.PluginBase
             get { return this.contextProvider.DotNetBarManager; }
         }
 
+        public IList<Wz_Structure> LoadedWz
+        {
+            get { return this.contextProvider.LoadedWz; }
+        }
+
         public Wz_Node SelectedNode1
         {
             get { return this.contextProvider.SelectedNode1; }
