@@ -17,6 +17,13 @@ namespace WzComparerR2.MapRender.Config
             this.MuteOnLeaveFocus = true;
             this.ClipMapRegion = true;
             this.EnableMobMovement = true;
+            this.CompositionOutputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            this.CompositionDurationSeconds = 10d;
+            this.CompositionFrameRate = 30d;
+            this.CompositionViewportWidth = 1920;
+            this.CompositionViewportHeight = 1080;
+            this.AfterEffectTemplateCreatorPath = string.Empty;
+            this.AfterFxPath = string.Empty;
         }
 
         [ConfigurationProperty("volume")]
@@ -101,6 +108,55 @@ namespace WzComparerR2.MapRender.Config
         {
             get { return (ConfigItem<bool>)this["enableMobMovement"]; }
             set { this["enableMobMovement"] = value; }
+        }
+
+        [ConfigurationProperty("composition.outputDirectory")]
+        public ConfigItem<string> CompositionOutputDirectory
+        {
+            get { return (ConfigItem<string>)this["composition.outputDirectory"]; }
+            set { this["composition.outputDirectory"] = value; }
+        }
+
+        [ConfigurationProperty("composition.durationSeconds")]
+        public ConfigItem<double> CompositionDurationSeconds
+        {
+            get { return (ConfigItem<double>)this["composition.durationSeconds"]; }
+            set { this["composition.durationSeconds"] = value; }
+        }
+
+        [ConfigurationProperty("composition.frameRate")]
+        public ConfigItem<double> CompositionFrameRate
+        {
+            get { return (ConfigItem<double>)this["composition.frameRate"]; }
+            set { this["composition.frameRate"] = value; }
+        }
+
+        [ConfigurationProperty("composition.viewportWidth")]
+        public ConfigItem<int> CompositionViewportWidth
+        {
+            get { return (ConfigItem<int>)this["composition.viewportWidth"]; }
+            set { this["composition.viewportWidth"] = value; }
+        }
+
+        [ConfigurationProperty("composition.viewportHeight")]
+        public ConfigItem<int> CompositionViewportHeight
+        {
+            get { return (ConfigItem<int>)this["composition.viewportHeight"]; }
+            set { this["composition.viewportHeight"] = value; }
+        }
+
+        [ConfigurationProperty("composition.afterEffectTemplateCreatorPath")]
+        public ConfigItem<string> AfterEffectTemplateCreatorPath
+        {
+            get { return (ConfigItem<string>)this["composition.afterEffectTemplateCreatorPath"]; }
+            set { this["composition.afterEffectTemplateCreatorPath"] = value; }
+        }
+
+        [ConfigurationProperty("composition.afterFxPath")]
+        public ConfigItem<string> AfterFxPath
+        {
+            get { return (ConfigItem<string>)this["composition.afterFxPath"]; }
+            set { this["composition.afterFxPath"] = value; }
         }
     }
 }

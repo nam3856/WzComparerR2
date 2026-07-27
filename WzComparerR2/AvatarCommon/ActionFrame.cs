@@ -9,9 +9,12 @@ namespace WzComparerR2.AvatarCommon
     {
         public ActionFrame()
         {
+            this.A0 = 255;
+            this.A1 = 255;
         }
 
         public ActionFrame(string action, int frame)
+            : this()
         {
             this.Action = action;
             this.Frame = frame;
@@ -20,6 +23,8 @@ namespace WzComparerR2.AvatarCommon
         public string Action { get; set; }
         public int? Frame { get; set; }
         public int Delay { get; set; }
+        public int A0 { get; set; }
+        public int A1 { get; set; }
         public int AbsoluteDelay
         {
             get { return Math.Abs(this.Delay); }

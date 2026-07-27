@@ -53,6 +53,10 @@ namespace WzComparerR2.OpenAPI
                     }
                     break;
 
+                case "GMS(북미)":
+                    this.region = 3;
+                    break;
+
                 default:
                     break;
             }
@@ -63,6 +67,17 @@ namespace WzComparerR2.OpenAPI
         private KMS.MapleStoryAPI API_KMS;
         private MSEA.MapleStoryAPI API_MSEA;
         private TMS.MapleStoryAPI API_TMS;
+        private GMSRankingCharacter GMSCharacter;
+
+        private const string GMSRankingUrl = "https://www.nexon.com/api/maplestory/no-auth/ranking/v2/na";
+        private static readonly HttpClient GMSHttpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+        private static readonly JsonSerializerOptions GMSJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        };
 
         public bool CheckSameAPIKey(string apiKey)
         {
@@ -79,6 +94,8 @@ namespace WzComparerR2.OpenAPI
                     return this.region == 1;
                 case "TMS":
                     return this.region == 2;
+                case "GMS(북미)":
+                    return this.region == 3;
                 default:
                     return false;
             }
@@ -102,6 +119,10 @@ namespace WzComparerR2.OpenAPI
                     case 2:
                         character = await API_TMS.GetCharacter(characterName);
                         return character.OCID;
+
+                    case 3:
+                        GMSCharacter = await GetGMSRankingCharacter(characterName);
+                        return GMSCharacter.CharacterName;
 
                     default:
                         return null;
@@ -128,6 +149,22 @@ namespace WzComparerR2.OpenAPI
         {
             try
             {
+                if (region == 3)
+                {
+                    if (GMSCharacter == null || !string.Equals(GMSCharacter.CharacterName, ocid, StringComparison.OrdinalIgnoreCase))
+                    {
+                        GMSCharacter = await GetGMSRankingCharacter(ocid);
+                    }
+
+                    var match = Regex.Match(GMSCharacter.CharacterImgURL ?? "", @"/Character/([A-P]+)\.png(?:\?|$)", RegexOptions.IgnoreCase);
+                    if (!match.Success)
+                    {
+                        throw new Exception("GMS 랭킹에서 캐릭터 외형 코드를 찾을 수 없습니다.");
+                    }
+
+                    return DecodeAvatarCode(match.Groups[1].Value);
+                }
+
                 MapleStory.OpenAPI.Common.DTO.CharacterBasicDTO basic = null;
                 switch (region)
                 {
@@ -172,6 +209,60 @@ namespace WzComparerR2.OpenAPI
             {
                 throw;
             }
+        }
+
+        private static async Task<GMSRankingCharacter> GetGMSRankingCharacter(string characterName)
+        {
+            if (string.IsNullOrWhiteSpace(characterName))
+            {
+                throw new Exception("캐릭터 이름을 입력해주세요.");
+            }
+
+            var requestUrl = GMSRankingUrl
+                + "?type=overall&id=legendary&reboot_index=0&page_index=1&character_name="
+                + Uri.EscapeDataString(characterName.Trim());
+            using var response = await GMSHttpClient.GetAsync(requestUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"GMS 랭킹 조회에 실패했습니다. (HTTP {(int)response.StatusCode})");
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<GMSRankingResponse>(json, GMSJsonOptions);
+            var character = result?.Ranks?.FirstOrDefault(rank =>
+                string.Equals(rank.CharacterName, characterName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (character == null)
+            {
+                throw new Exception($"GMS 랭킹에서 '{characterName.Trim()}' 캐릭터를 찾을 수 없습니다.");
+            }
+
+            return character;
+        }
+
+        private static UnpackedAvatarData DecodeAvatarCode(string data)
+        {
+            if (string.IsNullOrEmpty(data) || data.Length % 32 != 0)
+            {
+                throw new Exception("캐릭터 외형 코드 형식이 올바르지 않습니다.");
+            }
+
+            var decrypted = Utils.Decrypt(data);
+            var version = Utils.CheckVer(decrypted);
+            var unpackedData = new UnpackedAvatarData(version);
+            Utils.Unpack(unpackedData, decrypted);
+            unpackedData.SetProperties();
+            return unpackedData;
+        }
+
+        private sealed class GMSRankingResponse
+        {
+            public List<GMSRankingCharacter> Ranks { get; set; }
+        }
+
+        private sealed class GMSRankingCharacter
+        {
+            public string CharacterName { get; set; }
+            public string CharacterImgURL { get; set; }
         }
 
         public async Task<LoadedAvatarData> GetAvatarResult2(string ocid)

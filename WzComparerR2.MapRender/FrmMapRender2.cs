@@ -228,6 +228,9 @@ namespace WzComparerR2.MapRender
                     uiWnd.Cancel += UIOption_Cancel;
                     uiWnd.ResetSCRect += UIOption_ResetSCRect;
                     uiWnd.ChkForceClickEvent += UIOption_ChkForceClickEvent;
+                    uiWnd.BrowseAepPath += UIOption_BrowseAepPath;
+                    uiWnd.CreateAep += UIOption_CreateAep;
+                    uiWnd.CancelAep += UIOption_CancelAep;
                     uiWnd.Visible += UiWnd_Visible;
                     uiWnd.Visibility = EmptyKeys.UserInterface.Visibility.Visible;
                     this.ui.Windows.Add(uiWnd);
@@ -243,6 +246,7 @@ namespace WzComparerR2.MapRender
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { if (CanCapture()) prepareCapture = true; captureViewPortOnly = false; }), KeyCode.Scroll, ModifierKeys.None));
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { if (CanCapture()) prepareCapture = true; captureViewPortOnly = true; }), KeyCode.S, ModifierKeys.Control));
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => this.patchVisibility.CaptureRectVisible = !this.patchVisibility.CaptureRectVisible), KeyCode.S, ModifierKeys.None));
+            this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => BeginCompositionExportFromCurrentSettings()), KeyCode.E, ModifierKeys.Control));
 
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { renderEnv.Camera.AdjustRectEnabled = !renderEnv.Camera.AdjustRectEnabled; }), KeyCode.U, ModifierKeys.Control));
 
@@ -1604,6 +1608,7 @@ namespace WzComparerR2.MapRender
             model.ShowFootholdBoundary = config.ShowFootholdBoundary;
             model.EnableMobMovement = config.EnableMobMovement;
             LoadCaptureRectOptionData(model);
+            LoadCompositionOptionData(model);
         }
 
         private void SaveOptionData(UIOptionsDataModel model)
@@ -1624,6 +1629,7 @@ namespace WzComparerR2.MapRender
             config.ForceCaptureWithResolution = model.ForceCaptureWithResolution;
             config.ShowFootholdBoundary = model.ShowFootholdBoundary;
             config.EnableMobMovement = model.EnableMobMovement;
+            SaveCompositionOptionData(model, config);
             WzComparerR2.Config.ConfigManager.Save();
 
             if (int.TryParse(model.ScLeft, out int left) && int.TryParse(model.ScTop, out int top)
@@ -1696,6 +1702,8 @@ namespace WzComparerR2.MapRender
             {
                 return;
             }
+
+            CancelCompositionExport();
 
             this.batcher?.Dispose();
             this.batcher = null;

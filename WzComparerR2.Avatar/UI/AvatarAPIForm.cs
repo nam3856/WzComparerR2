@@ -24,7 +24,7 @@ namespace WzComparerR2.Avatar.UI
                 new ComboItem("KMS"){ Value = 1 },
                 //new ComboItem("JMS"){ Value = 2 },
                 //new ComboItem("CMS"){ Value = 3 },
-                //new ComboItem("GMS(북미)"){ Value = 4 },
+                new ComboItem("GMS(북미)"){ Value = 4 },
                 //new ComboItem("GMS(유럽)"){ Value = 5 },
                 new ComboItem("MSEA"){ Value = 6 },
                 new ComboItem("TMS"){ Value = 7 },

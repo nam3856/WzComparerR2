@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text;
 using WzComparerR2.MapRender.Patches;
 
@@ -126,6 +127,26 @@ namespace WzComparerR2.MapRender
         public IReadOnlyDictionary<string, bool> TagsVisible
         {
             get { return this.tagsVisible; }
+        }
+
+        /// <summary>
+        /// Returns an immutable point-in-time copy of the configured quest states.
+        /// </summary>
+        public IReadOnlyDictionary<int, int> QuestVisible
+        {
+            get { return new ReadOnlyDictionary<int, int>(new Dictionary<int, int>(this.questVisible)); }
+        }
+
+        /// <summary>
+        /// Returns an immutable point-in-time copy of the configured quest-key states.
+        /// </summary>
+        public IReadOnlyDictionary<Tuple<int, string>, int> QuestExVisible
+        {
+            get
+            {
+                return new ReadOnlyDictionary<Tuple<int, string>, int>(
+                    new Dictionary<Tuple<int, string>, int>(this.questexVisible));
+            }
         }
 
         public bool DefaultTagVisible { get; set; }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -18,6 +19,7 @@ using WzComparerR2.PluginBase;
 using WzComparerR2.Config;
 using WzComparerR2.Controls;
 using WzComparerR2.AvatarCommon;
+using WzComparerR2.Avatar.Export;
 using System.IO;
 
 #if NET6_0_OR_GREATER
@@ -554,7 +556,7 @@ namespace WzComparerR2.Avatar.UI
                 {
                     var actionFrames = avatar.GetActionFrames(avatar.ActionName);
                     var bone = avatar.CreateFrame(bodyFrame, emoFrame, tamingFrame, effectFrames);
-                    var layers = avatar.CreateFrameLayers(bone);
+                    var layers = CreatePreviewLayers(bone);
                     avatarContainer1.AddCache(actionTag, layers);
                 }
                 catch
@@ -563,6 +565,41 @@ namespace WzComparerR2.Avatar.UI
             }
 
             avatarContainer1.SetKey(actionTag);
+        }
+
+        private BitmapOrigin[] CreatePreviewLayers(Bone bone)
+        {
+            AvatarRenderPrimitive[] primitives = avatar.CreateFramePrimitives(bone);
+            var layers = new BitmapOrigin[primitives.Length];
+            try
+            {
+                for (int i = 0; i < primitives.Length; i++)
+                {
+                    AvatarRenderPrimitive primitive = primitives[i];
+                    // Keep preview painting independent from background exporters using the skin cache.
+                    var bitmap = new Bitmap(primitive.Bitmap);
+                    layers[i] = new BitmapOrigin(bitmap, -primitive.Position.X, -primitive.Position.Y);
+                }
+                return layers;
+            }
+            catch
+            {
+                foreach (BitmapOrigin layer in layers)
+                {
+                    layer.Bitmap?.Dispose();
+                }
+                throw;
+            }
+            finally
+            {
+                foreach (AvatarRenderPrimitive primitive in primitives)
+                {
+                    if (primitive.OwnsBitmap)
+                    {
+                        primitive.Bitmap?.Dispose();
+                    }
+                }
+            }
         }
 
         private string GetAllPartsTag()
@@ -2250,8 +2287,9 @@ namespace WzComparerR2.Avatar.UI
 
             if (dlg.ShowDialog() == DialogResult.OK)
             {
+                APIregion = dlg.selectedRegion;
                 var key = ((string)WcR2Config.Default.NexonOpenAPIKey).Trim();
-                if (string.IsNullOrEmpty(key))
+                if (APIregion != "GMS(북미)" && string.IsNullOrEmpty(key))
                 {
                     ToastNotification.Show(this, $"설정에서 API Key를 입력해주세요.", null, 3000, eToastGlowColor.Red, eToastPosition.TopCenter);
                     return;
@@ -2259,7 +2297,6 @@ namespace WzComparerR2.Avatar.UI
 
                 try
                 {
-                    APIregion = dlg.selectedRegion;
                     if (this.API == null || !this.API.CheckSameAPIKey(key) || !this.API.CheckRegion(APIregion))
                     {
                         this.API = new NexonOpenAPI(key, APIregion);
@@ -3325,6 +3362,211 @@ namespace WzComparerR2.Avatar.UI
         private void btnExport_Click(object sender, EventArgs e)
         {
             ExportAvatar2(sender, e);
+        }
+
+        private void btnExportRtd_Click(object sender, EventArgs e)
+        {
+            if (this.avatar.Body == null || this.avatar.Head == null)
+            {
+                MessageBoxEx.Show("캐릭터가 없습니다.");
+                return;
+            }
+
+            DialogResult scope = MessageBoxEx.Show(
+                "주요 동작만 내보내겠습니까?\r\n\r\n예: 주요 동작\r\n아니요: 전체 동작",
+                "RTD PNG 세트 내보내기",
+                MessageBoxButtons.YesNoCancel);
+            if (scope == DialogResult.Cancel)
+            {
+                return;
+            }
+
+            AvatarCommon.Action[] actions = (scope == DialogResult.Yes
+                ? avatar.Actions.Where(action => action.Level == 0)
+                : avatar.Actions).ToArray();
+            var exporter = new RtdAvatarExporter(avatar);
+            RtdExportEstimate estimate;
+            try
+            {
+                this.UseWaitCursor = true;
+                estimate = exporter.Estimate(actions);
+            }
+            catch (Exception ex)
+            {
+                MessageBoxEx.Show("RTD 내보내기 사전 검사를 통과하지 못했습니다.\r\n" + ex.Message, "RTD 내보내기 오류");
+                return;
+            }
+            finally
+            {
+                this.UseWaitCursor = false;
+            }
+
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "RTD PNG 세트를 저장할 폴더를 선택하세요. 기존 RTD 세트는 동기화되며 관계없는 파일은 유지됩니다.";
+                if (dialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                string outputPath = dialog.SelectedPath;
+                bool claimLegacy = RtdAvatarSetCommitter.HasUnmanagedLegacySet(outputPath);
+                if (claimLegacy && MessageBoxEx.Show(
+                    "이 폴더에 manifest가 없는 기존 RTD 형식 PNG가 있습니다.\r\n새 세트의 관리 대상으로 전환하고 오래된 RTD PNG를 정리하시겠습니까?",
+                    "기존 RTD 세트 확인",
+                    MessageBoxButtons.YesNo) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                string summary = string.Format(
+                    "동작 {0}개, 이펙트 트랙 {1}개를 내보냅니다.\r\n"
+                    + "30fps 최대 master: {2} ({3:N0} frames)\r\n"
+                    + "30fps 전체 master 합계: {4} ({5:N0} frames)\r\n"
+                    + "예상 interval/state 수: {6:N0}\r\n"
+                    + "3시간 fallback 동작: {7}, blink 생략 동작: {8}, 건너뛸 동작: {9}\r\n\r\n"
+                    + "계속하시겠습니까?",
+                    estimate.ActionCount,
+                    estimate.EffectTrackCount,
+                    FormatRtdFrameDuration(estimate.MaxMasterFrames),
+                    estimate.MaxMasterFrames,
+                    FormatRtdFrameDuration(estimate.TotalMasterFrames),
+                    estimate.TotalMasterFrames,
+                    estimate.EstimatedStateCount,
+                    estimate.FallbackActionCount,
+                    estimate.BlinkOmittedActionCount,
+                    estimate.SkippedActionCount);
+                if (MessageBoxEx.Show(summary, "RTD 내보내기 확인", MessageBoxButtons.YesNo) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                RtdExportResult exportResult = null;
+                RtdExportLog exportLog = RtdExportLog.Start(outputPath, actions.Select(action => action.Name));
+                string exportLogLocation = string.IsNullOrEmpty(exportLog.LogPath)
+                    ? "로그 파일을 만들지 못했습니다."
+                    : "로그: " + exportLog.LogPath;
+                exportLog.Write(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Estimate: actions={0}, effects={1}, states={2}, maxMasterFrames={3}, totalMasterFrames={4}",
+                    estimate.ActionCount,
+                    estimate.EffectTrackCount,
+                    estimate.EstimatedStateCount,
+                    estimate.MaxMasterFrames,
+                    estimate.TotalMasterFrames));
+                try
+                {
+                    ProgressDialog.Show(
+                        this.FindForm(),
+                        "RTD PNG 세트 내보내는 중...",
+                        estimate.ActionCount + "개 동작 준비 중...",
+                        true,
+                        false,
+                        async (context, cancellationToken) =>
+                        {
+                            bool timerWasEnabled = this.timer1.Enabled;
+                            bool acceptProgressUpdates = true;
+                            this.timer1.Stop();
+                            this.Enabled = false;
+                            context.ProgressMin = 0;
+                            context.ProgressMax = Math.Max(1, estimate.ActionCount);
+                            var progress = new Progress<Tuple<int, int, string>>(value =>
+                            {
+                                if (!acceptProgressUpdates)
+                                {
+                                    return;
+                                }
+                                context.ProgressMax = Math.Max(1, value.Item2);
+                                context.Progress = Math.Min(context.ProgressMax, value.Item1);
+                                context.Message = value.Item3;
+                                context.FullMessage = exportLogLocation + "\r\n현재 단계: " + value.Item3;
+                            });
+                            try
+                            {
+                                exportResult = await Task.Run(() => exporter.Export(
+                                    outputPath,
+                                    actions,
+                                    claimLegacy,
+                                    cancellationToken,
+                                    (current, total, message) =>
+                                    {
+                                        exportLog.Write("Progress [" + current + "/" + total + "]: " + message);
+                                        ((IProgress<Tuple<int, int, string>>)progress)
+                                            .Report(Tuple.Create(current, total, message));
+                                    }));
+                                exportLog.Write(string.Format(
+                                    CultureInfo.InvariantCulture,
+                                    "Completed: actions={0}, effects={1}, assets={2}, warnings={3}",
+                                    exportResult.ActionCount,
+                                    exportResult.EffectTrackCount,
+                                    exportResult.AssetCount,
+                                    exportResult.WarningCount));
+                                acceptProgressUpdates = false;
+                                context.Progress = context.ProgressMax;
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                acceptProgressUpdates = false;
+                                exportLog.Write("Canceled.");
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                acceptProgressUpdates = false;
+                                Exception displayException = ex is AggregateException aggregateException
+                                    && aggregateException.InnerExceptions.Count == 1
+                                    ? aggregateException.InnerExceptions[0]
+                                    : ex;
+                                exportLog.Write("ERROR: " + ex);
+                                context.Message = "오류: " + displayException.Message
+                                    + "\r\n" + exportLogLocation
+                                    + "\r\n오류 문구를 우클릭하면 전체 내용을 복사할 수 있습니다.";
+                                context.FullMessage = exportLogLocation + "\r\n\r\n" + ex;
+                                throw;
+                            }
+                            finally
+                            {
+                                this.Enabled = true;
+                                if (timerWasEnabled) this.timer1.Start();
+                            }
+                        });
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    exportLog.Write("ERROR outside progress dialog: " + ex);
+                    string logLocation = string.IsNullOrEmpty(exportLog.LogPath) ? string.Empty : "\r\n" + exportLogLocation;
+                    MessageBoxEx.Show("RTD PNG 세트를 내보내지 못했습니다.\r\n" + ex.Message + logLocation, "RTD 내보내기 오류");
+                    return;
+                }
+
+                if (exportResult != null)
+                {
+                    MessageBoxEx.Show(string.Format(
+                        "RTD PNG 세트를 만들었습니다.\r\n동작: {0}, 이펙트 트랙: {1}, PNG: {2}\r\nblink 생략 동작: {3}, 3시간 fallback 동작: {4}, 경고: {5}",
+                        exportResult.ActionCount,
+                        exportResult.EffectTrackCount,
+                        exportResult.AssetCount,
+                        exportResult.BlinkOmittedActionCount,
+                        exportResult.LongestFallbackActionCount,
+                        exportResult.WarningCount),
+                        "RTD 내보내기 완료");
+                }
+            }
+        }
+
+        private static string FormatRtdFrameDuration(long frames)
+        {
+            if (frames <= 0) return "00:00:00.00";
+            long totalSeconds = frames / RtdAvatarExporter.FrameRate;
+            long hours = totalSeconds / 3600;
+            long minutes = totalSeconds / 60 % 60;
+            long seconds = totalSeconds % 60;
+            long subSecond = frames % RtdAvatarExporter.FrameRate * 100 / RtdAvatarExporter.FrameRate;
+            return string.Format("{0:D2}:{1:D2}:{2:D2}.{3:D2}", hours, minutes, seconds, subSecond);
         }
 
         private void ExportAvatar2(object sender, EventArgs e)

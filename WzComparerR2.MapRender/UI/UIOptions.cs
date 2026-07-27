@@ -26,6 +26,9 @@ namespace WzComparerR2.MapRender.UI
         public event EventHandler Cancel;
         public event EventHandler ResetSCRect;
         public event EventHandler ChkForceClickEvent;
+        public event EventHandler BrowseAepPath;
+        public event EventHandler CreateAep;
+        public event EventHandler CancelAep;
 
         private List<Button> buttons { get; set; } = new List<Button>();
 
@@ -74,6 +77,10 @@ namespace WzComparerR2.MapRender.UI
             tabSC.Header = "스크린샷";
             tabSC.Content = GetTabContentSC();
 
+            TabItem tabComposition = new TabItem();
+            tabComposition.Header = "컴포지션";
+            tabComposition.Content = GetTabContentComposition();
+
             TabItem tab5 = new TabItem();
             tab5.Header = "도움말";
             tab5.Content = GetTabContent5();
@@ -82,7 +89,7 @@ namespace WzComparerR2.MapRender.UI
             tabControl.Resources.Add(typeof(TabItem), GetTabItemStyle());
             tabControl.Margin = new Thickness(5, 0, 5, 0);
             tabControl.TabStripPlacement = Dock.Left;
-            tabControl.ItemsSource = new[] { tab1, tab2, tab3, tab4, tabSC, tab5 };
+            tabControl.ItemsSource = new[] { tab1, tab2, tab3, tab4, tabSC, tabComposition, tab5 };
             grid.Children.Add(tabControl);
             Grid.SetRow(tabControl, 1);
             Grid.SetColumn(tabControl, 0);
@@ -125,8 +132,8 @@ namespace WzComparerR2.MapRender.UI
             Grid.SetRow(footer, 3);
             Grid.SetColumn(footer, 0);
 
-            this.Width = 400;
-            this.Height = 300;
+            this.Width = 560;
+            this.Height = 390;
             this.SetResourceReference(BackgroundProperty, MapRenderResourceKey.TooltipBrush);
             base.InitializeComponents();
         }
@@ -153,6 +160,22 @@ namespace WzComparerR2.MapRender.UI
         {
             this.ChkForceClickEvent?.Invoke(this, EventArgs.Empty);
             return;
+        }
+
+        private void BtnBrowseAepPath_Click(object sender, RoutedEventArgs e)
+        {
+            this.BrowseAepPath?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void BtnCreateAep_Click(object sender, RoutedEventArgs e)
+        {
+            this.DisableButtons();
+            this.CreateAep?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void BtnCancelAep_Click(object sender, RoutedEventArgs e)
+        {
+            this.CancelAep?.Invoke(this, EventArgs.Empty);
         }
 
         private void DisableButtons()
@@ -615,6 +638,7 @@ namespace WzComparerR2.MapRender.UI
                  "[ScrollLock] 스크린샷",
                  "[S] 캡쳐 범위 표시",
                  "[Ctrl+S] 현재 화면만 캡쳐",
+                 "[Ctrl+E] AEP 만들기",
                  "",
                  "시뮬레이터 :",
                  "[R] 모든 몬스터 초기화",
@@ -634,6 +658,138 @@ namespace WzComparerR2.MapRender.UI
             ScrollViewer viewer = new ScrollViewer();
             viewer.Content = panel;
             return viewer;
+        }
+
+        private UIElement GetTabContentComposition()
+        {
+            Grid grid = new Grid();
+            for (int i = 0; i < 12; i++)
+            {
+                grid.RowDefinitions.Add(new RowDefinition() { Height = new GridLength(25, GridUnitType.Pixel) });
+            }
+            grid.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(92, GridUnitType.Pixel) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(66, GridUnitType.Pixel) });
+
+            TextBlock outputLabel = CreateCompositionLabel("AEP 경로", true);
+            Grid.SetRow(outputLabel, 0);
+            grid.Children.Add(outputLabel);
+
+            TextBox outputPath = new TextBox();
+            outputPath.SetBinding(TextBox.TextProperty, new Binding(nameof(UIOptionsDataModel.CompositionAepPath)));
+            Grid.SetRow(outputPath, 0);
+            Grid.SetColumn(outputPath, 1);
+            grid.Children.Add(outputPath);
+
+            Button browseButton = new Button();
+            browseButton.Content = "찾기";
+            browseButton.Margin = new Thickness(4, 1, 0, 1);
+            browseButton.Click += BtnBrowseAepPath_Click;
+            Grid.SetRow(browseButton, 0);
+            Grid.SetColumn(browseButton, 2);
+            grid.Children.Add(browseButton);
+            this.buttons.Add(browseButton);
+
+            AddCompositionTextBox(grid, 1, "길이(초)", nameof(UIOptionsDataModel.CompositionDurationSeconds));
+            AddCompositionTextBox(grid, 2, "FPS", nameof(UIOptionsDataModel.CompositionFrameRate));
+
+            TextBlock viewportLabel = CreateCompositionLabel("뷰포트", true);
+            Grid.SetRow(viewportLabel, 3);
+            grid.Children.Add(viewportLabel);
+
+            StackPanel viewportPanel = new StackPanel() { Orientation = Orientation.Horizontal };
+            TextBox viewportWidth = new TextBox() { Width = 70 };
+            viewportWidth.SetBinding(TextBox.TextProperty, new Binding(nameof(UIOptionsDataModel.CompositionViewportWidth)));
+            viewportPanel.Children.Add(viewportWidth);
+            TextBlock viewportSeparator = CreateCompositionLabel(" × ", false);
+            viewportPanel.Children.Add(viewportSeparator);
+            TextBox viewportHeight = new TextBox() { Width = 70 };
+            viewportHeight.SetBinding(TextBox.TextProperty, new Binding(nameof(UIOptionsDataModel.CompositionViewportHeight)));
+            viewportPanel.Children.Add(viewportHeight);
+            Grid.SetRow(viewportPanel, 3);
+            Grid.SetColumn(viewportPanel, 1);
+            grid.Children.Add(viewportPanel);
+
+            TextBlock worldLabel = CreateCompositionLabel("월드 범위", true);
+            Grid.SetRow(worldLabel, 4);
+            grid.Children.Add(worldLabel);
+
+            AddCompositionTextBox(grid, 5, "좌", nameof(UIOptionsDataModel.CompositionWorldLeft));
+            AddCompositionTextBox(grid, 6, "상", nameof(UIOptionsDataModel.CompositionWorldTop));
+            AddCompositionTextBox(grid, 7, "우", nameof(UIOptionsDataModel.CompositionWorldRight));
+            AddCompositionTextBox(grid, 8, "하", nameof(UIOptionsDataModel.CompositionWorldBottom));
+
+            TextBlock hint = new TextBlock();
+            hint.Text = "PNG는 편집 레이어로, Spine은 PNG 시퀀스 프리컴프로 생성합니다.";
+            hint.TextWrapping = TextWrapping.Wrap;
+            hint.Foreground = Brushes.LightGray;
+            hint.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(hint, 9);
+            Grid.SetColumn(hint, 0);
+            Grid.SetColumnSpan(hint, 3);
+            grid.Children.Add(hint);
+
+            TextBlock status = new TextBlock();
+            status.SetBinding(TextBlock.TextProperty, new Binding(nameof(UIOptionsDataModel.CompositionStatus)));
+            status.TextWrapping = TextWrapping.Wrap;
+            status.Foreground = Brushes.Yellow;
+            status.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(status, 10);
+            Grid.SetColumn(status, 0);
+            Grid.SetColumnSpan(status, 3);
+            grid.Children.Add(status);
+
+            StackPanel actionPanel = new StackPanel() { Orientation = Orientation.Horizontal };
+            actionPanel.HorizontalAlignment = HorizontalAlignment.Center;
+
+            Button createButton = new Button();
+            createButton.Content = "AEP 만들기";
+            createButton.Width = 110;
+            createButton.Height = 22;
+            createButton.Margin = new Thickness(3, 0, 3, 0);
+            createButton.Click += BtnCreateAep_Click;
+            actionPanel.Children.Add(createButton);
+            this.buttons.Add(createButton);
+
+            Button cancelButton = new Button();
+            cancelButton.Content = "생성 취소";
+            cancelButton.Width = 80;
+            cancelButton.Height = 22;
+            cancelButton.Margin = new Thickness(3, 0, 3, 0);
+            cancelButton.Click += BtnCancelAep_Click;
+            actionPanel.Children.Add(cancelButton);
+
+            Grid.SetRow(actionPanel, 11);
+            Grid.SetColumn(actionPanel, 0);
+            Grid.SetColumnSpan(actionPanel, 3);
+            grid.Children.Add(actionPanel);
+
+            ScrollViewer viewer = new ScrollViewer();
+            viewer.Content = grid;
+            return viewer;
+        }
+
+        private static TextBlock CreateCompositionLabel(string text, bool highlighted)
+        {
+            return new TextBlock()
+            {
+                Text = text,
+                Foreground = highlighted ? Brushes.Yellow : Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        private static void AddCompositionTextBox(Grid grid, int row, string label, string propertyName)
+        {
+            TextBlock textLabel = CreateCompositionLabel(label, false);
+            Grid.SetRow(textLabel, row);
+            grid.Children.Add(textLabel);
+
+            TextBox textBox = new TextBox() { Width = 90, HorizontalAlignment = HorizontalAlignment.Left };
+            textBox.SetBinding(TextBox.TextProperty, new Binding(propertyName));
+            Grid.SetRow(textBox, row);
+            Grid.SetColumn(textBox, 1);
+            grid.Children.Add(textBox);
         }
 
         private Style GetTabItemStyle()
@@ -687,6 +843,16 @@ namespace WzComparerR2.MapRender.UI
         private string _scTop;
         private string _scRight;
         private string _scBottom;
+        private string _compositionAepPath;
+        private string _compositionDurationSeconds;
+        private string _compositionFrameRate;
+        private string _compositionViewportWidth;
+        private string _compositionViewportHeight;
+        private string _compositionWorldLeft;
+        private string _compositionWorldTop;
+        private string _compositionWorldRight;
+        private string _compositionWorldBottom;
+        private string _compositionStatus;
 
         public bool MuteOnLeaveFocus
         {
@@ -794,6 +960,66 @@ namespace WzComparerR2.MapRender.UI
         {
             get { return this._scRight; }
             set { base.SetProperty(ref this._scRight, value); }
+        }
+
+        public string CompositionAepPath
+        {
+            get { return this._compositionAepPath; }
+            set { base.SetProperty(ref this._compositionAepPath, value); }
+        }
+
+        public string CompositionDurationSeconds
+        {
+            get { return this._compositionDurationSeconds; }
+            set { base.SetProperty(ref this._compositionDurationSeconds, value); }
+        }
+
+        public string CompositionFrameRate
+        {
+            get { return this._compositionFrameRate; }
+            set { base.SetProperty(ref this._compositionFrameRate, value); }
+        }
+
+        public string CompositionViewportWidth
+        {
+            get { return this._compositionViewportWidth; }
+            set { base.SetProperty(ref this._compositionViewportWidth, value); }
+        }
+
+        public string CompositionViewportHeight
+        {
+            get { return this._compositionViewportHeight; }
+            set { base.SetProperty(ref this._compositionViewportHeight, value); }
+        }
+
+        public string CompositionWorldLeft
+        {
+            get { return this._compositionWorldLeft; }
+            set { base.SetProperty(ref this._compositionWorldLeft, value); }
+        }
+
+        public string CompositionWorldTop
+        {
+            get { return this._compositionWorldTop; }
+            set { base.SetProperty(ref this._compositionWorldTop, value); }
+        }
+
+        public string CompositionWorldRight
+        {
+            get { return this._compositionWorldRight; }
+            set { base.SetProperty(ref this._compositionWorldRight, value); }
+        }
+
+        public string CompositionWorldBottom
+        {
+            get { return this._compositionWorldBottom; }
+            set { base.SetProperty(ref this._compositionWorldBottom, value); }
+        }
+
+        public string CompositionStatus
+        {
+            get { return this._compositionStatus; }
+            set { base.SetProperty(ref this._compositionStatus, value); }
         }
     }
 }

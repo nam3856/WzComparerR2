@@ -80,6 +80,7 @@
             this.btnLock = new DevComponents.DotNetBar.ButtonItem();
             this.btnSaveAsGif = new DevComponents.DotNetBar.ButtonItem();
             this.btnExport = new DevComponents.DotNetBar.ButtonItem();
+            this.btnExportRtd = new DevComponents.DotNetBar.ButtonItem();
             this.btnZoom = new DevComponents.DotNetBar.ButtonItem();
             this.dockSite3 = new DevComponents.DotNetBar.DockSite();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
@@ -754,10 +755,11 @@
             this.btnZoom,
             this.btnLock,
             this.btnSaveAsGif,
-            this.btnExport});
+            this.btnExport,
+            this.btnExportRtd});
             this.bar3.Location = new System.Drawing.Point(0, 0);
             this.bar3.Name = "bar3";
-            this.bar3.Size = new System.Drawing.Size(168, 27);
+            this.bar3.Size = new System.Drawing.Size(192, 27);
             this.bar3.Style = DevComponents.DotNetBar.eDotNetBarStyle.StyleManagerControlled;
             this.bar3.TabIndex = 0;
             this.bar3.TabStop = false;
@@ -832,6 +834,13 @@
             this.btnExport.Name = "btnExport";
             this.btnExport.Tooltip = "동작 내보내기";
             this.btnExport.Click += new System.EventHandler(this.btnExport_Click);
+            //
+            // btnExportRtd
+            //
+            this.btnExportRtd.Image = global::WzComparerR2.Avatar.Properties.Resources.png;
+            this.btnExportRtd.Name = "btnExportRtd";
+            this.btnExportRtd.Tooltip = "RTD PNG 세트 내보내기";
+            this.btnExportRtd.Click += new System.EventHandler(this.btnExportRtd_Click);
             // 
             // dockSite3
             // 
@@ -941,6 +950,7 @@
         private DevComponents.DotNetBar.Controls.ComboBoxEx cmbEar;
         private DevComponents.DotNetBar.LabelX labelX5;
         private DevComponents.DotNetBar.ButtonItem btnExport;
+        private DevComponents.DotNetBar.ButtonItem btnExportRtd;
         private DevComponents.DotNetBar.ButtonItem btnZoom;
         private DevComponents.DotNetBar.LabelX labelX6;
         private DevComponents.DotNetBar.Controls.ComboBoxEx cmbGroupChair;

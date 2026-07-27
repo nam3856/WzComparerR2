@@ -13,5 +13,12 @@ namespace WzComparerR2.AvatarCommon
         public Point Offset { get; set; }
         public string Z { get; set; }
         public int ZIndex { get; set; }
+        public AvatarRenderPrimitiveKind PrimitiveKind { get; set; }
+        public int? EffectSlot { get; set; }
+        public int? EffectItemId { get; set; }
+        public string EffectBranch { get; set; }
+        public string SourceKey { get; set; }
+        public int A0 { get; set; } = 255;
+        public int A1 { get; set; } = 255;
     }
 }
