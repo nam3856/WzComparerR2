@@ -57,6 +57,7 @@
             this.labelHue = new DevComponents.DotNetBar.LabelItem();
             this.labelSaturation = new DevComponents.DotNetBar.LabelItem();
             this.labelBrightness = new DevComponents.DotNetBar.LabelItem();
+            this.chkConvertPureBlack = new DevComponents.DotNetBar.CheckBoxItem();
             // 
             // btnItemShow
             // 
@@ -253,6 +254,14 @@
             this.labelBrightness.Name = "labelBrightness";
             this.labelBrightness.Text = "명도";
             // 
+            // chkConvertPureBlack
+            // 
+            this.chkConvertPureBlack.AutoCollapseOnClick = false;
+            this.chkConvertPureBlack.Checked = true;
+            this.chkConvertPureBlack.CheckState = System.Windows.Forms.CheckState.Unchecked;
+            this.chkConvertPureBlack.Name = "chkConvertPureBlack";
+            this.chkConvertPureBlack.Text = "순수한 검은색도 명도 조절에 포함";
+            // 
             // AvatarPartButtonItem
             // 
             this.AutoCheckOnClick = true;
@@ -298,5 +307,6 @@
         public DevComponents.DotNetBar.LabelItem labelHue;
         public DevComponents.DotNetBar.LabelItem labelSaturation;
         public DevComponents.DotNetBar.LabelItem labelBrightness;
+        public DevComponents.DotNetBar.CheckBoxItem chkConvertPureBlack;
     }
 }
