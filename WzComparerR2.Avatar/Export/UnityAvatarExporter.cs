@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using WzComparerR2.AvatarCommon;
+using WzComparerR2.Common;
 using WzComparerR2.UnityExport;
 using WzUnity;
 
@@ -21,14 +22,16 @@ namespace WzComparerR2.Avatar.Export
     public sealed class UnityAvatarExporter
     {
         private readonly AvatarCanvas avatar;
+        private readonly List<WzEquippedItem> equipment;
 
         public string AppearanceId { get; }
 
-        public UnityAvatarExporter(AvatarCanvas source)
+        public UnityAvatarExporter(AvatarCanvas source, StringLinker strings = null)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             // A separate skin cache is essential: preview bitmaps belong to the UI.
             avatar = Snapshot(source);
+            equipment = UnityAvatarEquipment.Capture(avatar, strings);
             var description = new WzEntity();
             DescribeOutfit(description);
             string canonical = string.Concat(description.metadata.OrderBy(item => item.key, StringComparer.Ordinal)
@@ -342,6 +345,8 @@ namespace WzComparerR2.Avatar.Export
 
         private void DescribeOutfit(WzEntity entity)
         {
+            entity.hasEquipmentMetadata = true;
+            entity.equipment.AddRange(equipment);
             Meta(entity.metadata, "equipmentScope", "current-outfit");
             Meta(entity.metadata, "maskingScope", "current-combination");
             Meta(entity.metadata, "capType", avatar.CapType);

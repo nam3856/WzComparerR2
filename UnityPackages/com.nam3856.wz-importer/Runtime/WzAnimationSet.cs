@@ -11,6 +11,8 @@ namespace WzComparerR2.Unity
         public string defaultAction;
         public float pixelsPerUnit = 100;
         public WzUnity.WzMetadata[] metadata = Array.Empty<WzUnity.WzMetadata>();
+        public bool hasEquipmentMetadata;
+        public WzUnity.WzEquippedItem[] equipment = Array.Empty<WzUnity.WzEquippedItem>();
         public WzAnimationAction[] actions = Array.Empty<WzAnimationAction>();
 
         public WzAnimationAction Find(string action)

@@ -40,7 +40,7 @@ namespace WzComparerR2.Avatar.UI
             using (var dialog = new FolderBrowserDialog { Description = "캐릭터별 하위 폴더를 만들 위치를 선택하세요." })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                var exporter = new UnityAvatarExporter(avatar);
+                var exporter = new UnityAvatarExporter(avatar, this.PluginEntry.Context.DefaultStringLinker);
                 string outputPath = Path.Combine(dialog.SelectedPath, exporter.AppearanceId);
                 WzUnityManifest result = null;
                 Task<WzUnityManifest> exportTask = null;

@@ -66,13 +66,18 @@ internal static class Smoke
                 using var data = new DataSource(args[1]);
                 AvatarSmoke.Run(data.Find, args[2]);
             }
+            else if (args[0] == "equipment")
+            {
+                using var data = new DataSource(args[1]);
+                AvatarEquipmentSmoke.RunOriginal(data.Find);
+            }
             else if (args[0] == "gui") GuiSmoke.Run(args[1], args[2]);
             else if (args[0] == "reactor")
             {
                 using var data = new DataSource(args[1]);
                 EntitySmoke.RunReactor(data.Find, args[2]);
             }
-            else throw new ArgumentException("synthetic [output] | data <Base.wz> | export <Base.wz> <output> [map IDs]");
+            else throw new ArgumentException("synthetic [output] | data <Base.wz> | equipment <Base.wz> | export <Base.wz> <output> [map IDs]");
             Console.WriteLine("SMOKE_PASS");
             return 0;
         }
@@ -81,6 +86,7 @@ internal static class Smoke
 
     private static void Synthetic(string output)
     {
+        AvatarEquipmentSmoke.Run();
         EntitySmoke.Run(output);
         using (var writer = new UnityExportWriter(output, "synthetic", "mob", "synthetic/origin-delay"))
         using (var bitmap = new Bitmap(8, 12))

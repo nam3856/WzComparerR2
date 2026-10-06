@@ -42,8 +42,31 @@ namespace WzUnity
         public string sourcePath;
         public string displayName;
         public string defaultAction;
+        // False means an older export or a source that did not supply outfit data.
+        public bool hasEquipmentMetadata;
+        public List<WzEquippedItem> equipment = new List<WzEquippedItem>();
         public List<WzMetadata> metadata = new List<WzMetadata>();
         public List<WzAnimationClip> clips = new List<WzAnimationClip>();
+    }
+    [Serializable] public sealed class WzEquippedItem
+    {
+        public int slotIndex;
+        public string slot;
+        public string itemId;
+        public string name;
+        public string nameSourcePath;
+        public string sourcePath;
+        public string islot;
+        public string vslot;
+        public bool visible;
+        public bool effectVisible;
+        public bool hasImage;
+        public bool isSkill;
+        public bool isIllusionRing;
+        public bool illusionRingClassificationKnown;
+        public string illusionRingSourcePath;
+        // Original scalar info fields, including an explicit illusionGrade when present.
+        public List<WzMetadata> metadata = new List<WzMetadata>();
     }
     [Serializable] public sealed class WzAnimationClip
     {

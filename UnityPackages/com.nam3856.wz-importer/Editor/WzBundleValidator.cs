@@ -44,6 +44,20 @@ namespace WzComparerR2.Unity.Editor
             {
                 Require(entity != null && !string.IsNullOrWhiteSpace(entity.id) && !entities.ContainsKey(entity.id), "Empty or duplicate entity id.");
                 entities.Add(entity.id, entity);
+                if (entity.hasEquipmentMetadata)
+                {
+                    Require(entity.equipment != null, "Equipment metadata presence has no inventory: " + entity.id);
+                    var slots = new HashSet<int>();
+                    foreach (var item in entity.equipment)
+                    {
+                        Require(item != null && item.slotIndex >= 0 && slots.Add(item.slotIndex)
+                            && !string.IsNullOrEmpty(item.slot), "Empty or duplicate equipment slot: " + entity.id);
+                        Require(!item.isIllusionRing || (item.illusionRingClassificationKnown
+                            && int.TryParse(item.itemId, out int itemId) && itemId > 0 && itemId / 10000 == 111
+                            && !string.IsNullOrEmpty(item.illusionRingSourcePath)),
+                            "Verified illusion ring is missing its source evidence: " + entity.id);
+                    }
+                }
                 Require(entity.clips != null && entity.clips.Count > 0, "Entity has no animations: " + entity.id);
                 var clipNames = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var clip in entity.clips)

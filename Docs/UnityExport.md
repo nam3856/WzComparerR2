@@ -6,6 +6,8 @@ PowerShell에서 저장소의 `Build/Build-UnityExport.ps1`을 실행하면 .NET
 
 실행 파일: `WzComparerR2/bin/Release/net8.0-windows/WzComparerR2.exe`
 
+이 빌드는 .NET 8 Desktop Runtime이 필요합니다. 런타임을 포함한 Windows x64 게시물은 `.tmp/portable/WzComparerR2-win-x64`에 별도로 생성할 수 있습니다. 본체를 `dotnet publish WzComparerR2/WzComparerR2.csproj -c Release -f net8.0-windows -r win-x64 --self-contained true -o .tmp/portable/WzComparerR2-win-x64`로 게시한 뒤 Release 출력의 플러그인과 `Lib` 네이티브 의존성도 함께 포함합니다. 실행 파일만 옮기지 말고 게시물 폴더 전체를 사용합니다.
+
 MapleT는 `E:/nexon/MapleT/Data/Base/Base.wz`를 엽니다. 최신 upstream의 KMST1205/1206 로더를 사용하며 Base 폴더와 Packs의 MS/MN 데이터를 함께 읽습니다. 개별 플러그인 프로젝트를 빌드할 때도 본체의 해당 구성/프레임워크 Plugin 폴더로 복사됩니다.
 
 ## 추출
@@ -15,6 +17,10 @@ MapleT는 `E:/nexon/MapleT/Data/Base/Base.wz`를 엽니다. 최신 upstream의 K
 - **몬스터·NPC·리액터:** WZ 트리에서 해당 IMG나 하위 노드를 우클릭해 **몬스터·NPC·리액터 Unity 추출**을 선택합니다. 개체별 하위 폴더를 생성합니다.
 
 각 폴더에는 `wz-unity.json`, `png/`, `export-report.txt`가 있습니다. 다른 프로그램을 실행할 필요가 없으며 AEP는 생성하지 않습니다.
+
+캐릭터의 `entity.hasEquipmentMetadata=true`와 `entity.equipment`에는 비어 있지 않은 전체 장착 슬롯(최대 29개)이 포함됩니다. 렌더에 보이지 않는 반지·이미지가 없는 아이템도 유지합니다. 각 항목은 슬롯 번호·이름, 아이템 ID, 표시·이펙트 상태, 원본 WZ 경로, 읽을 수 있는 원본 `info` 값, StringLinker에서 찾은 아이템 이름과 이름의 출처를 담습니다. 찾지 못한 이름·ID를 추측하지 않습니다. 이전 추출의 `hasEquipmentMetadata=false`는 장착 정보가 없다는 의미이며 장비가 없다는 판정에 사용하지 않습니다. 스키마 버전은 1을 유지하므로 이전 추출도 계속 가져올 수 있습니다.
+
+일루전링은 원본 반지의 `info/illusionGrade`가 정수 0 이상일 때 `isIllusionRing=true`, `illusionRingClassificationKnown=true`로 기록합니다. 원본 `info`를 정상적으로 읽었지만 값이 없으면 일반 반지로 확인하며, 읽기 실패·잘못된 값·해결되지 않는 링크는 판별 미확인으로 남깁니다. 외형·이름·`prone` 동작 유무로 추정하지 않습니다. Unity는 이 목록을 `WzAnimationSet.equipment`에 직렬화하여 재임포트·씬 재열기에도 보존합니다. MapleLive의 새 컨트롤러는 이 정보를 이용해 일루전링 잠수를 자동으로 엎드리기로 선택합니다.
 
 추출은 별도 임시 폴더에서 완성한 뒤 기존 결과를 교체합니다. 취소·실패하면 기존 결과를 유지합니다. 같은 ID의 추출 결과만 갱신하며, 추출기가 만들지 않은 파일도 보존합니다. 경고가 있으면 완료 메시지와 보고서에서 누락 원본 경로·사유를 확인할 수 있습니다.
 
@@ -84,3 +90,7 @@ reactor <Base.wz> <출력폴더>
 `mapcheck`는 실제 Spine 맵을 이용해 GPU 베이크 도중 취소, 이전 추출 결과 보존, 원본 미리보기와 GPU 상태 복원, 반복 추출의 일관성을 검사합니다. Unity에서는 **Tools > WZ Importer > Validate Importer**로 임포트·재임포트·프레임 재생·씬 재열기·취소 및 오류 복원을 검증합니다. 보고서는 프로젝트의 `Library/WzImporterValidation/latest.json`에 저장됩니다.
 
 `gui`는 실제 본체의 파일 열기와 한글 이름 초기화·아바타 미리보기를, `mapgui`는 Bellona 미리보기와 추출 메뉴를 검사하고 화면을 저장합니다. `reactor`는 실제 상태별 프레임을 확인합니다. Unity의 `WzRealValidation.Run(추출상위폴더)`는 임포트된 실제 데이터의 씬·참조·원본 좌표·프레임 재생을 검사하며 결과는 `Library/WzImporterValidation/real-validation.json`에 기록합니다.
+
+2026-10-07에는 본체와 5개 플러그인의 Release 빌드가 오류 없이 완료됐습니다. 합성 검증은 전체 29슬롯, 숨겨진 이미지 없는 반지, 등급 0·잘못된 값·원본 링크·구버전 JSON과 기존 추출기 회귀를 통과했습니다. `equipment <Base.wz>`는 실제 원본의 일반 반지 1112000, 이미지 없는 일루전링 1114500, 일루전링 1114501, 등급 0 일루전링 1116125의 판별을 확인했습니다. 실제 아바타 검증은 4개 동작·PNG 63개·원본 비교 12시점 픽셀 일치·장착 정보 보존·취소 복구를 통과했습니다. 테스트는 설치된 .NET 10에서 명시적 `--roll-forward Major`로 실행했으며 프로젝트의 .NET 8 런타임 정책은 유지했습니다. MapleLive Unity 6000.3.16f1 임포터 검증에서도 저장된 장착 정보와 재임포트·씬 재열기를 확인했습니다.
+
+같은 날 .NET Core·Desktop 8.0.27을 포함한 Windows x64 게시물도 생성했습니다. 네이티브 의존성·플러그인 파일 25개의 복사 해시와 6개 의존성 manifest의 관리 라이브러리 258개를 확인했으며 누락이 없습니다. 포터블 실행 파일은 실행하지 않았고 별도 런타임을 설치하지 않았습니다.

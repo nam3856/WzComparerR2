@@ -243,6 +243,10 @@ namespace WzComparerR2.Unity.Editor
             set.defaultAction = entity.defaultAction;
             set.pixelsPerUnit = ppu;
             set.metadata = (entity.metadata ?? new List<WzMetadata>()).ToArray();
+            set.hasEquipmentMetadata = entity.hasEquipmentMetadata;
+            set.equipment = entity.hasEquipmentMetadata
+                ? (entity.equipment ?? new List<WzEquippedItem>()).ToArray()
+                : Array.Empty<WzEquippedItem>();
             set.actions = entity.clips.Select(clip => new WzAnimationAction
             {
                 name = clip.name, loop = clip.loop, durationMs = clip.durationMs,

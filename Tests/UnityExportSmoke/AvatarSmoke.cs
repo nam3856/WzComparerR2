@@ -38,6 +38,12 @@ internal static class AvatarSmoke
         Smoke.Assert(manifest.entities.Count == 1 && manifest.entities[0].clips.Count == actions.Length,
             "Avatar action export incomplete");
         var entity = manifest.entities[0];
+        Smoke.Assert(entity.hasEquipmentMetadata && entity.equipment.Count == avatar.Parts.Count(part => part != null),
+            "Avatar export lost outfit presence or a configured part");
+        foreach (var item in entity.equipment)
+            Smoke.Assert(item.itemId == avatar.Parts[item.slotIndex].ID?.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                && item.visible == avatar.Parts[item.slotIndex].Visible,
+                "Avatar equipment identity or visibility changed: " + item.slot);
         foreach (var clip in entity.clips)
         {
             ActionFrame[] sourceFrames = avatar.GetActionFrames(clip.name);

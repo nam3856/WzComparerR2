@@ -37,6 +37,10 @@ namespace WzComparerR2.Unity.Editor
             Scene validationScene = default;
             try
             {
+                var oldEntity = JsonConvert.DeserializeObject<WzEntity>("{\"id\":\"old-avatar\",\"kind\":\"avatar\"}");
+                Require(!oldEntity.hasEquipmentMetadata && oldEntity.equipment.Count == 0,
+                    "An older manifest invented equipment metadata.");
+                report.checks.Add("Older manifests retain unknown outfit presence and an empty equipment inventory");
                 Directory.CreateDirectory(fixture);
                 var manifest = CreateFixture(fixture);
                 string manifestPath = Path.Combine(fixture, "wz-unity.json");
@@ -116,6 +120,14 @@ namespace WzComparerR2.Unity.Editor
                 Require(prefab.GetComponentsInChildren<SpriteRenderer>(true).Length == 2, "Prefab render children were not serialized.");
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, validationScene);
                 var animator = instance.GetComponent<WzSpriteAnimator>();
+                var importedEquipment = animator.animationSet.equipment;
+                Require(animator.animationSet.hasEquipmentMetadata && importedEquipment.Length == 1
+                    && importedEquipment[0].slotIndex == 25 && importedEquipment[0].itemId == "1116125"
+                    && !importedEquipment[0].visible && !importedEquipment[0].hasImage
+                    && importedEquipment[0].isIllusionRing && importedEquipment[0].illusionRingClassificationKnown
+                    && importedEquipment[0].metadata.Any(item => item.key == "info/illusionGrade" && item.value == "0"),
+                    "Saved/reopened animation asset lost an invisible equipment item or grade-zero ring classification.");
+                report.checks.Add("Animation assets retain structured equipment, invisible info-only items and verified grade-zero ring evidence");
                 int rendererCount = instance.GetComponentsInChildren<SpriteRenderer>(true).Length;
                 animator.Play("stand");
                 animator.Advance(0.08f);
@@ -217,6 +229,15 @@ namespace WzComparerR2.Unity.Editor
             for (int faceIndex = 0; faceIndex < 2; faceIndex++)
                 face.poses.Add(new WzTrackPose { poseFrame = bodyIndex, frameIndex = faceIndex, overrideSprite = true, assetId = "frame", x = (bodyIndex + faceIndex + 1) * 10, y = -20, z = 1 });
             var entity = new WzEntity { id = "fixture/mob", kind = "mob", defaultAction = "stand" };
+            entity.hasEquipmentMetadata = true;
+            entity.equipment.Add(new WzEquippedItem
+            {
+                slotIndex = 25, slot = "Ring1", itemId = "1116125", name = "Original fixture ring",
+                sourcePath = "Character\\Ring\\01116125.img", visible = false, hasImage = false,
+                isIllusionRing = true, illusionRingClassificationKnown = true,
+                illusionRingSourcePath = "Character\\Ring\\01116125.img\\info\\illusionGrade",
+                metadata = new List<WzMetadata> { new WzMetadata { key = "info/illusionGrade", value = "0" } }
+            });
             entity.clips.Add(new WzAnimationClip { name = "stand", loop = true, durationMs = 200, tracks = new List<WzUnity.WzAnimationTrack> { body, face } });
             entity.clips.Add(new WzAnimationClip { name = "die", loop = false, durationMs = 200, tracks = new List<WzUnity.WzAnimationTrack> { body } });
             manifest.entities.Add(entity);

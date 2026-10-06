@@ -208,3 +208,4 @@ WzComparerR2/BuildInfo.cs
 
 # Generated real-data verification output stays local.
 .tmp/unity-export-validation/
+.tmp/portable/
