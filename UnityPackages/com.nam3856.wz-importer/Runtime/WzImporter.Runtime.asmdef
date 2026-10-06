@@ -1,0 +1,6 @@
+{
+  "name": "WzImporter.Runtime",
+  "rootNamespace": "WzComparerR2.Unity",
+  "references": [],
+  "autoReferenced": true
+}

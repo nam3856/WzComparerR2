@@ -26,6 +26,7 @@ namespace WzComparerR2.MapRender.UI
         public event EventHandler Cancel;
         public event EventHandler ResetSCRect;
         public event EventHandler ChkForceClickEvent;
+        public event EventHandler ExportUnity;
 
         private List<Button> buttons { get; set; } = new List<Button>();
 
@@ -74,6 +75,10 @@ namespace WzComparerR2.MapRender.UI
             tabSC.Header = "스크린샷";
             tabSC.Content = GetTabContentSC();
 
+            TabItem tabUnity = new TabItem();
+            tabUnity.Header = "Unity 추출";
+            tabUnity.Content = GetTabContentUnity();
+
             TabItem tab5 = new TabItem();
             tab5.Header = "도움말";
             tab5.Content = GetTabContent5();
@@ -82,7 +87,7 @@ namespace WzComparerR2.MapRender.UI
             tabControl.Resources.Add(typeof(TabItem), GetTabItemStyle());
             tabControl.Margin = new Thickness(5, 0, 5, 0);
             tabControl.TabStripPlacement = Dock.Left;
-            tabControl.ItemsSource = new[] { tab1, tab2, tab3, tab4, tabSC, tab5 };
+            tabControl.ItemsSource = new[] { tab1, tab2, tab3, tab4, tabSC, tabUnity, tab5 };
             grid.Children.Add(tabControl);
             Grid.SetRow(tabControl, 1);
             Grid.SetColumn(tabControl, 0);
@@ -615,6 +620,7 @@ namespace WzComparerR2.MapRender.UI
                  "[ScrollLock] 스크린샷",
                  "[S] 캡쳐 범위 표시",
                  "[Ctrl+S] 현재 화면만 캡쳐",
+                 "[Ctrl+E] Unity 맵 내보내기",
                  "",
                  "시뮬레이터 :",
                  "[R] 모든 몬스터 초기화",
@@ -635,6 +641,25 @@ namespace WzComparerR2.MapRender.UI
             ScrollViewer viewer = new ScrollViewer();
             viewer.Content = panel;
             return viewer;
+        }
+
+        private UIElement GetTabContentUnity()
+        {
+            var panel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(8) };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "현재 맵의 레이어, 애니메이션, 발판, 사다리, 포털과 원본 NPC/몬스터 배치를 Unity용으로 저장합니다.",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
+            });
+            var button = new Button { Content = "Unity 맵 내보내기 (Ctrl+E)", Height = 30 };
+            button.Click += (sender, args) => ExportUnity?.Invoke(this, EventArgs.Empty);
+            panel.Children.Add(button);
+            panel.Children.Add(new TextBlock
+            {
+                Text = "선택한 폴더 아래에 Maps/맵ID를 만듭니다. Spine은 30 FPS PNG로 저장하며, 지원하지 않는 항목은 보고서에 표시합니다.",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0)
+            });
+            return panel;
         }
 
         private Style GetTabItemStyle()

@@ -58,6 +58,7 @@ namespace WzComparerR2.Avatar.UI
             this.Font = new Font("굴림", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
             this.btnCharac.SubItems.Add(this.btnAPI);
 #endif
+            ConfigureUnityExport();
         }
 
         public SuperTabControlPanel GetTabPanel()

@@ -137,11 +137,15 @@ namespace WzComparerR2.Controls
         /// </summary>
         protected override void OnPaint(PaintEventArgs e)
         {
+            bool deviceLocked = false;
             try
             {
                 if (!DesignMode)
                 {
-                    System.Threading.Monitor.Enter(this.GraphicsDevice);
+                    // A background Unity export can hold the shared device while baking.
+                    // Keep the UI message loop available for progress and cancellation.
+                    deviceLocked = System.Threading.Monitor.TryEnter(this.GraphicsDevice);
+                    if (!deviceLocked) return;
                 }
 
                 string beginDrawError = this.BeginDraw();
@@ -160,7 +164,7 @@ namespace WzComparerR2.Controls
             }
             finally
             {
-                if (!DesignMode)
+                if (deviceLocked)
                 {
                     System.Threading.Monitor.Exit(this.GraphicsDevice);
                 }

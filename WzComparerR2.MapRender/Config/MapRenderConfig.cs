@@ -96,6 +96,13 @@ namespace WzComparerR2.MapRender.Config
             set { this["showFootholdBoundary"] = value; }
         }
 
+        [ConfigurationProperty("unity.outputDirectory")]
+        public ConfigItem<string> UnityOutputDirectory
+        {
+            get { return (ConfigItem<string>)this["unity.outputDirectory"]; }
+            set { this["unity.outputDirectory"] = value; }
+        }
+
         [ConfigurationProperty("enableMobMovement")]
         public ConfigItem<bool> EnableMobMovement
         {

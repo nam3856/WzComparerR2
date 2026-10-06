@@ -202,3 +202,9 @@ OldVer/
 
 # Ignore automatically generated BuildInfo.cs
 WzComparerR2/BuildInfo.cs
+
+# Unity package GUIDs are part of its source, unlike legacy compiler .meta files.
+!UnityPackages/**/*.meta
+
+# Generated real-data verification output stays local.
+.tmp/unity-export-validation/

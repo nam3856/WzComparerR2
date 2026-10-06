@@ -1378,11 +1378,18 @@ namespace WzComparerR2.MapRender
                 if (cy == 0) cy = renderSize.Y;
             }
 
-            float GetBackScrollOffset(BackItem back, int rate, int explicitDistance)
+            float GetBackScrollOffset(BackItem back, int rate, int explicitDistance, int repeatSize)
             {
-                int distance = back.W && explicitDistance != 0 ? Math.Abs(explicitDistance) : 100;
-                return (float)(rate * distance * back.View.Time / 20000.0 % distance);
+                // W/Wx/Wy scale the speed, while only a complete repeated tile can
+                // wrap without a visible jump. Multiply in double before elapsed
+                // time grows large enough to overflow an integer product.
+                double distance = back.W && explicitDistance != 0 ? Math.Abs((double)explicitDistance) : 100;
+                double offset = rate * distance * back.View.Time / 20000.0;
+                return (float)(repeatSize > 0 ? offset % repeatSize : offset);
             }
+
+            int repeatX = (back.TileMode & TileMode.Horizontal) != 0 ? cx : 0;
+            int repeatY = (back.TileMode & TileMode.Vertical) != 0 ? cy : 0;
 
             Vector2 tileOff = new Vector2(cx, cy);
             Vector2 position = new Vector2(back.X, back.Y);
@@ -1398,11 +1405,11 @@ namespace WzComparerR2.MapRender
                 {
                     if (flowX != 0)
                     {
-                        position.X += GetBackScrollOffset(back, flowRate, back.Wx);
+                        position.X += GetBackScrollOffset(back, flowRate, back.Wx, repeatX);
                     }
                     if (flowY != 0)
                     {
-                        position.Y += GetBackScrollOffset(back, flowRate, back.Wy);
+                        position.Y += GetBackScrollOffset(back, flowRate, back.Wy, repeatY);
                     }
                 }
             }
@@ -1410,7 +1417,7 @@ namespace WzComparerR2.MapRender
             {
                 if ((back.TileMode & TileMode.ScrollHorizontal) != 0)
                 {
-                    position.X += GetBackScrollOffset(back, back.Rx, back.Wx);
+                    position.X += GetBackScrollOffset(back, back.Rx, back.Wx, repeatX);
                 }
                 else //镜头移动比率偏移
                 {
@@ -1420,7 +1427,7 @@ namespace WzComparerR2.MapRender
                 //计算垂直卷动
                 if ((back.TileMode & TileMode.ScrollVertical) != 0)
                 {
-                    position.Y += GetBackScrollOffset(back, back.Ry, back.Wy);
+                    position.Y += GetBackScrollOffset(back, back.Ry, back.Wy, repeatY);
                 }
                 else //镜头移动比率偏移
                 {

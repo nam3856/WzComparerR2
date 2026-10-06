@@ -1,0 +1,9 @@
+{
+  "name": "com.nam3856.wz-importer",
+  "version": "1.0.0",
+  "displayName": "WZ Unity Importer",
+  "description": "Import WzComparerR2 sprite animations, character prefabs and map scenes.",
+  "unity": "6000.0",
+  "dependencies": { "com.unity.nuget.newtonsoft-json": "3.2.1" },
+  "author": { "name": "WzComparerR2 contributors" }
+}

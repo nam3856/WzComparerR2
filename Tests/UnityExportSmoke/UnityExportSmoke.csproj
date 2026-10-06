@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <SolutionDir>$(MSBuildThisFileDirectory)..\..\</SolutionDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\WzComparerR2\WzComparerR2.csproj" />
+    <ProjectReference Include="..\..\WzComparerR2.MapRender\WzComparerR2.MapRender.csproj" />
+    <ProjectReference Include="..\..\WzComparerR2.Avatar\WzComparerR2.Avatar.csproj" />
+  </ItemGroup>
+</Project>

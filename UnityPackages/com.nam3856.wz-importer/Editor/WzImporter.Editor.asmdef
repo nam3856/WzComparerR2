@@ -1,0 +1,7 @@
+{
+  "name": "WzImporter.Editor",
+  "rootNamespace": "WzComparerR2.Unity.Editor",
+  "references": ["WzImporter.Runtime", "Unity.Newtonsoft.Json"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

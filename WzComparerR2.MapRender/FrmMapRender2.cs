@@ -240,6 +240,7 @@ namespace WzComparerR2.MapRender
             uiWnd.Cancel += UIOption_Cancel;
             uiWnd.ResetSCRect += UIOption_ResetSCRect;
             uiWnd.ChkForceClickEvent += UIOption_ChkForceClickEvent;
+            uiWnd.ExportUnity += (sender, args) => BeginUnityMapExport();
             uiWnd.Visible += UiWnd_Visible;
 
             this.ui.Windows.Add(uiWnd);
@@ -267,6 +268,7 @@ namespace WzComparerR2.MapRender
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { if (CanCapture()) prepareCapture = true; captureViewPortOnly = false; }), KeyCode.Scroll, ModifierKeys.None));
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { if (CanCapture()) prepareCapture = true; captureViewPortOnly = true; }), KeyCode.S, ModifierKeys.Control));
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => this.patchVisibility.CaptureRectVisible = !this.patchVisibility.CaptureRectVisible), KeyCode.S, ModifierKeys.None));
+            this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => BeginUnityMapExport()), KeyCode.E, ModifierKeys.Control));
 
             this.ui.InputBindings.Add(new KeyBinding(new RelayCommand(_ => { renderEnv.Camera.AdjustRectEnabled = !renderEnv.Camera.AdjustRectEnabled; }), KeyCode.U, ModifierKeys.Control));
 

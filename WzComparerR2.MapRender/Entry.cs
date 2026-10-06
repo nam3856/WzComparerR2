@@ -32,6 +32,7 @@ namespace WzComparerR2.MapRender
 
         protected override void OnLoad()
         {
+            Export.UnitySpineExportBridge.Register();
             #if MapRenderV1
             this.bar = Context.AddRibbonBar("Modules", "MapRender");
             btnItemMapRender = new ButtonItem("", "맵 미리보기");

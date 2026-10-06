@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WzComparerR2.WzLib\WzComparerR2.WzLib.csproj" />
+    <Compile Include="..\UnityPackages\com.nam3856.wz-importer\Runtime\ExportManifest.cs" Link="UnityExport\ExportManifest.cs" />
     <PackageReference Include="MonoGame.Framework.WindowsDX" Version="$(MonogameFrameworkVersion)" />
   </ItemGroup>
   <ItemGroup>

@@ -50,6 +50,8 @@ namespace WzComparerR2.MapRender
         #endregion
 
         public MapScene Scene { get; private set; }
+        /// <summary>Resolved source map for deterministic exports of original placements.</summary>
+        public Wz_Node SourceNode { get; private set; }
         public IList<TooltipItem> Tooltips { get; private set; }
         public List<MapEvent> MapEvents { get; private set; }
         public FootholdManager FootholdManager { get; private set; }
@@ -110,6 +112,7 @@ namespace WzComparerR2.MapRender
             {
                 throw new Exception("Cannot find or extract map link node.");
             }
+            this.SourceNode = mapImgNode;
 
             //加载小地图
             Wz_Node node;

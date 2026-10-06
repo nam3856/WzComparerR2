@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <MainProgramOutputDir Condition="'$(MainProgramOutputDir)' == ''">$(SolutionDir)WzComparerR2\bin\$(Configuration)\$(TargetFramework)</MainProgramOutputDir>
+    <MainProgramOutputDir Condition="'$(MainProgramOutputDir)' == ''">$(MSBuildThisFileDirectory)..\WzComparerR2\bin\$(Configuration)\$(TargetFramework)</MainProgramOutputDir>
     <PluginOutputDir Condition="'$(PluginOutputDir)' == ''">$(MainProgramOutputDir)\Plugin\$(MSBuildProjectName)</PluginOutputDir>
     <NativeLibOutputDir Condition="'$(NativeLibOutputDir)' == ''">$(MainProgramOutputDir)\Lib</NativeLibOutputDir>
   </PropertyGroup>

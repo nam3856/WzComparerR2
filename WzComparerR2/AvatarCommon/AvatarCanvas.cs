@@ -918,6 +918,8 @@ namespace WzComparerR2.AvatarCommon
         private void LoadActionFrameDesc(Wz_Node frameNode, ActionFrame actionFrame)
         {
             actionFrame.Delay = frameNode.Nodes["delay"].GetValueEx<int>(120);
+            actionFrame.A0 = frameNode.Nodes["a0"].GetValueEx<int>(255);
+            actionFrame.A1 = frameNode.Nodes["a1"].GetValueEx<int>(actionFrame.A0);
             actionFrame.Flip = frameNode.Nodes["flip"].GetValueEx<int>(0) != 0;
             var faceNode = frameNode.Nodes["face"];
             if (faceNode != null)
@@ -1138,14 +1140,39 @@ namespace WzComparerR2.AvatarCommon
                             break;
 
                         case IndexEffectLayer1:
-                            tmpNode = LinkEffectParts(effectActions[i], this.Effect.EffectNode?.FindNodeByPath("effect"), this.Effect.Visible && this.Effect.EffectVisible, curPart);
+                            tmpNode = LinkEffectParts(
+                                effectActions[i],
+                                this.Effect.EffectNode?.FindNodeByPath("effect"),
+                                this.Effect.Visible && this.Effect.EffectVisible,
+                                curPart,
+                                effectSlot: i,
+                                effectItemId: this.Effect.ID,
+                                effectBranch: "effect",
+                                independentEffect: true);
                             effectNodes.AddRange(tmpNode);
-                            tmpNode = LinkEffectParts(effectActions[IndexEffectLayer2], this.Effect.EffectNode?.FindNodeByPath("effect2"), this.Effect.Visible && this.Effect.EffectVisible, curPart);
+                            tmpNode = LinkEffectParts(
+                                effectActions[IndexEffectLayer2],
+                                this.Effect.EffectNode?.FindNodeByPath("effect2"),
+                                this.Effect.Visible && this.Effect.EffectVisible,
+                                curPart,
+                                effectSlot: IndexEffectLayer2,
+                                effectItemId: this.Effect.ID,
+                                effectBranch: "effect2",
+                                independentEffect: true);
                             effectNodes.AddRange(tmpNode);
                             break;
 
                         default:
-                            tmpNode = LinkEffectParts(effectActions[i], this.Parts[i].EffectNode, this.Parts[i].Visible && this.Parts[i].EffectVisible, curPart);
+                            bool independentEffect = this.Parts[i] != this.Taming && this.Parts[i] != this.Saddle;
+                            tmpNode = LinkEffectParts(
+                                effectActions[i],
+                                this.Parts[i].EffectNode,
+                                this.Parts[i].Visible && this.Parts[i].EffectVisible,
+                                curPart,
+                                effectSlot: i,
+                                effectItemId: this.Parts[i].ID,
+                                effectBranch: "effect",
+                                independentEffect: independentEffect);
                             effectNodes.AddRange(tmpNode);
                             break;
                     }
@@ -1238,10 +1265,12 @@ namespace WzComparerR2.AvatarCommon
             foreach (AvatarFrameData partNode in frameNodes)
             {
                 Wz_Node linkPartNode = partNode.FrameNode;
-                while (linkPartNode.Value is Wz_Uol)
+                while (linkPartNode?.Value is Wz_Uol)
                 {
                     linkPartNode = linkPartNode.GetValue<Wz_Uol>().HandleUol(linkPartNode);
                 }
+
+                if (linkPartNode == null) continue;
 
                 Wz_Node linkPartMixNode = partNode.MixFrameNode;
                 while (linkPartMixNode?.Value is Wz_Uol)
@@ -1254,6 +1283,7 @@ namespace WzComparerR2.AvatarCommon
 
                     Skin skin = new Skin();
                     skin.Name = frameIdx;
+                    ApplyFrameMetadata(skin, partNode, linkPartNode);
                     string pos = linkPartNode.ParentNode.FindNodeByPath("pos")?.GetValueEx<string>(null) ?? "0";
                     skin.Offset = new Point(0, 0);
 
@@ -1466,6 +1496,7 @@ namespace WzComparerR2.AvatarCommon
                         //读取纹理
                         Skin skin = new Skin();
                         skin.Name = childNode.Text;
+                        ApplyFrameMetadata(skin, partNode, linkNode);
 
                         if (!(partNode.IsBodyPart && this.HideBody))
                         {
@@ -1659,6 +1690,28 @@ namespace WzComparerR2.AvatarCommon
             }
         }
 
+        private void ApplyFrameMetadata(Skin skin, AvatarFrameData frameData, Wz_Node sourceNode)
+        {
+            skin.PartSlot = frameData.IsBodyPart ? 0 : Array.IndexOf(this.Parts, frameData.Part);
+            skin.PartItemId = frameData.IsBodyPart ? this.Body?.ID : frameData.Part?.ID;
+            var sourceMap = sourceNode?.Nodes["map"];
+            if (sourceMap != null)
+            {
+                foreach (Wz_Node anchor in sourceMap.Nodes)
+                {
+                    if (anchor.Value is Wz_Vector point)
+                        skin.SourceAnchors[anchor.Text] = new Point(point.X, point.Y);
+                }
+            }
+            skin.PrimitiveKind = frameData.PrimitiveKind;
+            skin.EffectSlot = frameData.EffectSlot;
+            skin.EffectItemId = frameData.EffectItemId;
+            skin.EffectBranch = frameData.EffectBranch;
+            skin.SourceKey = sourceNode?.FullPathToFile;
+            skin.A0 = frameData.ActionFrame?.A0 ?? 255;
+            skin.A1 = frameData.ActionFrame?.A1 ?? 255;
+        }
+
         public BitmapOrigin DrawFrame(Bone bone)
         {
             var bmpLayers = this.CreateFrameLayers(bone);
@@ -1691,16 +1744,54 @@ namespace WzComparerR2.AvatarCommon
 
         public BitmapOrigin[] CreateFrameLayers(Bone bone)
         {
+            AvatarRenderPrimitive[] primitives = CreateFramePrimitives(bone);
+            var bmpLayers = new BitmapOrigin[primitives.Length];
+            for (int i = 0; i < bmpLayers.Length; i++)
+            {
+                var primitive = primitives[i];
+                bmpLayers[i] = new BitmapOrigin(primitive.Bitmap, -primitive.Position.X, -primitive.Position.Y);
+            }
+            return bmpLayers;
+        }
+
+        /// <summary>
+        /// Creates transformed render primitives in the same back-to-front order used by <see cref="DrawFrame(Bone)"/>.
+        /// </summary>
+        public AvatarRenderPrimitive[] CreateFramePrimitives(Bone bone)
+        {
             List<AvatarLayer> layers = GenerateLayer(bone);
             layers.Sort((l0, l1) => l1.ZIndex.CompareTo(l0.ZIndex));
 
-            var bmpLayers = new BitmapOrigin[layers.Count];
-            for (int i = 0; i < bmpLayers.Length; i++)
+            var primitives = new AvatarRenderPrimitive[layers.Count];
+            for (int i = 0; i < layers.Count; i++)
             {
-                var layer = layers[i];
-                bmpLayers[i] = new BitmapOrigin(layer.Bitmap, -layer.Position.X, -layer.Position.Y);
+                AvatarLayer layer = layers[i];
+                Skin skin = layer.Skin;
+                primitives[i] = new AvatarRenderPrimitive
+                {
+                    Bitmap = layer.Bitmap,
+                    OwnsBitmap = !object.ReferenceEquals(layer.Bitmap, skin.Image.Bitmap),
+                    Position = layer.Position,
+                    PartSlot = skin.PartSlot,
+                    PartItemId = skin.PartItemId,
+                    SkinName = skin.Name,
+                    BoneName = layer.BoneName,
+                    BonePosition = layer.BonePosition,
+                    SourceAnchors = skin.SourceAnchors,
+                    RawZ = skin.Z,
+                    RawZIndex = string.IsNullOrEmpty(skin.Z) ? skin.ZIndex : (int?)null,
+                    ResolvedZ = layer.ZIndex,
+                    DrawOrdinal = i,
+                    Kind = skin.PrimitiveKind,
+                    EffectSlot = skin.EffectSlot,
+                    EffectItemId = skin.EffectItemId,
+                    EffectBranch = skin.EffectBranch,
+                    SourceKey = skin.SourceKey,
+                    A0 = skin.A0,
+                    A1 = skin.A1
+                };
             }
-            return bmpLayers;
+            return primitives;
         }
 
         private unsafe void TransformPixel(Bitmap src, Bitmap dst, Matrix mt)
@@ -1779,6 +1870,9 @@ namespace WzComparerR2.AvatarCommon
 
                     layer.Bitmap = bmp;
                     layer.Position = position;
+                    layer.Skin = skin;
+                    layer.BoneName = parent.Name;
+                    layer.BonePosition = pos;
                     if (!string.IsNullOrEmpty(skin.Z))
                     {
                         layer.ZIndex = this.ZMap.IndexOf(skin.Z);
@@ -1876,7 +1970,7 @@ namespace WzComparerR2.AvatarCommon
             {
                 //身体
                 Wz_Node bodyNode = FindBodyActionNode(bodyAction);
-                partNode.Add(new AvatarFrameData(bodyNode, null, 100, this.Head, isBodyPart: true));
+                partNode.Add(new AvatarFrameData(bodyNode, null, 100, this.Head, isBodyPart: true, actionFrame: bodyAction));
 
                 //计算面向
                 bool? face = bodyAction.Face; //扩展动作规定头部
@@ -1907,7 +2001,7 @@ namespace WzComparerR2.AvatarCommon
                         headNode = FindActionFrameNode(this.Head.Node, headAction);
                     }
                 }
-                partNode.Add(new AvatarFrameData(headNode, null, 100, this.Head));
+                partNode.Add(new AvatarFrameData(headNode, null, 100, this.Head, actionFrame: bodyAction));
 
                 //脸
                 if (this.Face != null && this.Face.Visible && faceAction != null)
@@ -1916,7 +2010,7 @@ namespace WzComparerR2.AvatarCommon
                     {
                         Wz_Node mixFaceNode = this.Face.IsMixing ? FindActionFrameNode(this.Face.MixNodes[this.Face.MixColor], faceAction) : null;
                         int mixFaceRatio = this.Face.IsMixing ? this.Face.MixOpacity : 100;
-                        partNode.Add(new AvatarFrameData(FindActionFrameNode(this.Face.Node, faceAction), mixFaceNode, mixFaceRatio, this.Face));
+                        partNode.Add(new AvatarFrameData(FindActionFrameNode(this.Face.Node, faceAction), mixFaceNode, mixFaceRatio, this.Face, actionFrame: faceAction));
                     }
                 }
                 //毛
@@ -1936,7 +2030,7 @@ namespace WzComparerR2.AvatarCommon
                     }
                     mixHairNode = this.Hair.IsMixing ? mixHairNode : null;
                     int mixHairRatio = this.Hair.IsMixing ? this.Hair.MixOpacity : 100;
-                    partNode.Add(new AvatarFrameData(hairNode, mixHairNode, mixHairRatio, this.Hair));
+                    partNode.Add(new AvatarFrameData(hairNode, mixHairNode, mixHairRatio, this.Hair, actionFrame: bodyAction));
                 }
                 //cap
                 if (headNode != null && this.Cap != null && this.Cap.Visible)
@@ -1951,7 +2045,7 @@ namespace WzComparerR2.AvatarCommon
                             capNode = FindActionFrameNode(this.Cap.Node, capAction);
                         }
                     }
-                    partNode.Add(new AvatarFrameData(capNode, null, 100, this.Cap));
+                    partNode.Add(new AvatarFrameData(capNode, null, 100, this.Cap, actionFrame: bodyAction));
                 }
                 //其他部件
                 for (int i = 5; i < 16; i++)
@@ -1963,18 +2057,18 @@ namespace WzComparerR2.AvatarCommon
                         if (i == 12 && Gear.GetGearType(part.ID.Value) == GearType.cashWeapon) //点装武器
                         {
                             var wpNode = part.Node.FindNodeByPath(this.WeaponType.ToString());
-                            partNode.Add(new AvatarFrameData(FindActionFrameNode(wpNode, bodyAction), null, 100, part));
+                            partNode.Add(new AvatarFrameData(FindActionFrameNode(wpNode, bodyAction), null, 100, part, actionFrame: bodyAction));
                         }
                         else if (i == 14) //脸
                         {
                             if (face ?? true)
                             {
-                                partNode.Add(new AvatarFrameData(FindActionFrameNode(part.Node, faceAction), null, 100, part));
+                                partNode.Add(new AvatarFrameData(FindActionFrameNode(part.Node, faceAction), null, 100, part, actionFrame: faceAction));
                             }
                         }
                         else //其他部件
                         {
-                            partNode.Add(new AvatarFrameData(FindActionFrameNode(part.Node, bodyAction), null, 100, part));
+                            partNode.Add(new AvatarFrameData(FindActionFrameNode(part.Node, bodyAction), null, 100, part, actionFrame: bodyAction));
                         }
                     }
                 }
@@ -1988,7 +2082,6 @@ namespace WzComparerR2.AvatarCommon
         private AvatarFrameData[] LinkTamingParts(ActionFrame tamingAction)
         {
             List<Tuple<Wz_Node, AvatarPart>> partNode = new List<Tuple<Wz_Node, AvatarPart>>();
-            var prismInfo = new PrismDataCollection();
 
             //链接马
             if (this.Taming != null && this.Taming.Visible && tamingAction != null)
@@ -1999,12 +2092,11 @@ namespace WzComparerR2.AvatarCommon
                     var saddleNode = this.Saddle.Node.FindNodeByPath(false, this.Taming.ID.ToString());
                     partNode.Add(new Tuple<Wz_Node, AvatarPart>(FindActionFrameNode(saddleNode, tamingAction), this.Saddle));
                 }
-                prismInfo = this.Taming.PrismData;
             }
 
             partNode.RemoveAll(node => node == null);
 
-            return partNode.Select(node => new AvatarFrameData(node.Item1, null, 100, node.Item2, applyAvatarScale: false)).ToArray();
+            return partNode.Select(node => new AvatarFrameData(node.Item1, null, 100, node.Item2, applyAvatarScale: false, actionFrame: tamingAction)).ToArray();
         }
 
         private List<AvatarFrameData> LinkGroupTamingParts(ActionFrame tamingAction, AvatarPart part)
@@ -2029,10 +2121,19 @@ namespace WzComparerR2.AvatarCommon
 
             partNode.RemoveAll(node => node == null);
 
-            return partNode.Select(node => new AvatarFrameData(node, null, 100, part, applyAvatarScale: false)).ToList();
+            return partNode.Select(node => new AvatarFrameData(node, null, 100, part, applyAvatarScale: false, actionFrame: tamingAction)).ToList();
         }
 
-        private List<AvatarFrameData> LinkEffectParts(ActionFrame aFrame, Wz_Node effNode, bool visible, AvatarPart part, bool applyAvatarScale = true) // find effect nodes
+        private List<AvatarFrameData> LinkEffectParts(
+            ActionFrame aFrame,
+            Wz_Node effNode,
+            bool visible,
+            AvatarPart part,
+            bool applyAvatarScale = true,
+            int? effectSlot = null,
+            int? effectItemId = null,
+            string effectBranch = null,
+            bool independentEffect = false) // find effect nodes
         {
             List<Wz_Node> partNode = new List<Wz_Node>();
 
@@ -2044,7 +2145,20 @@ namespace WzComparerR2.AvatarCommon
 
             partNode.RemoveAll(node => node == null);
 
-            return partNode.Select(node => new AvatarFrameData(node, (Wz_Node)null, 100, part, applyAvatarScale: applyAvatarScale)).ToList();
+            AvatarRenderPrimitiveKind primitiveKind = independentEffect
+                ? AvatarRenderPrimitiveKind.IndependentEffect
+                : AvatarRenderPrimitiveKind.Base;
+            return partNode.Select(node => new AvatarFrameData(
+                node,
+                (Wz_Node)null,
+                100,
+                part,
+                applyAvatarScale: applyAvatarScale,
+                actionFrame: aFrame,
+                primitiveKind: primitiveKind,
+                effectSlot: independentEffect ? effectSlot : null,
+                effectItemId: independentEffect ? effectItemId : null,
+                effectBranch: independentEffect ? effectBranch : null)).ToList();
         }
 
         private Wz_Node FindBodyActionNode(ActionFrame actionFrame)
@@ -2579,6 +2693,9 @@ namespace WzComparerR2.AvatarCommon
             public Bitmap Bitmap { get; set; }
             public Point Position { get; set; }
             public int ZIndex { get; set; }
+            public Skin Skin { get; set; }
+            public string BoneName { get; set; }
+            public Point BonePosition { get; set; }
         }
 
         private struct Matrix
