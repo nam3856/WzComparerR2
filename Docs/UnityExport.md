@@ -22,6 +22,8 @@ MapleT는 `E:/nexon/MapleT/Data/Base/Base.wz`를 엽니다. 최신 upstream의 K
 
 일루전링은 원본 반지의 `info/illusionGrade`가 정수 0 이상일 때 `isIllusionRing=true`, `illusionRingClassificationKnown=true`로 기록합니다. 원본 `info`를 정상적으로 읽었지만 값이 없으면 일반 반지로 확인하며, 읽기 실패·잘못된 값·해결되지 않는 링크는 판별 미확인으로 남깁니다. 외형·이름·`prone` 동작 유무로 추정하지 않습니다. Unity는 이 목록을 `WzAnimationSet.equipment`에 직렬화하여 재임포트·씬 재열기에도 보존합니다. MapleLive의 새 컨트롤러는 이 정보를 이용해 일루전링 잠수를 자동으로 엎드리기로 선택합니다.
 
+확인된 일루전링을 장착한 캐릭터는 반지 원본의 완성 변신 PNG로 자동 추출합니다. 반지 슬롯의 UI 가시성 설정으로 변신을 끄지 않으며, 그 설정은 장착 메타데이터에 그대로 남깁니다. 여러 일루전링이 있으면 원본 우선순위를 추측하지 않고 중단합니다. 변신 이미지의 원점·투명도·프레임 지연을 보존하고, 사람이 입은 내부 장비를 다시 합성하거나 인간 얼굴을 덧붙이지 않습니다. `rendering/mode=illusion-ring`과 아이템 ID·슬롯·원본 경로가 적용 근거를 기록하며 전체 장착 목록과 기존 부위 정보도 유지합니다. 원본 `stand2`가 없으면 `stand1`의 동일 원본 이미지와 시간을 사용하고 `rendering/sourceActionAliases=stand2=stand1`을 명시합니다.
+
 추출은 별도 임시 폴더에서 완성한 뒤 기존 결과를 교체합니다. 취소·실패하면 기존 결과를 유지합니다. 같은 ID의 추출 결과만 갱신하며, 추출기가 만들지 않은 파일도 보존합니다. 경고가 있으면 완료 메시지와 보고서에서 누락 원본 경로·사유를 확인할 수 있습니다.
 
 ## KMS 캐릭터 이름으로 CLI 추출
@@ -40,6 +42,36 @@ dotnet --roll-forward Major .\Tests\UnityExportSmoke\bin\Release\net8.0-windows\
 ```
 
 결과는 출력 폴더 아래 외형 해시 폴더에 저장됩니다. 기본 표정과 원본 `blink`의 `stand1`·`stand2`·`sit`·`prone` 동작, 전체 장착 메타데이터를 하나의 `wz-unity.json`에 포함합니다. `face-variant-map.json`은 몸 포즈별 얼굴 이미지·좌표·원본 경로를 기록하고, `previews`의 PNG와 `preview-origins.json`은 원본 렌더 비교용입니다. `.kms-variants-*` 폴더는 합치기 전 추출의 근거 자료이며, Unity에는 최종 `wz-unity.json`이 있는 외형 해시 폴더만 가져옵니다. 지원하지 않는 외형 코드나 필요한 원본이 없으면 임의 이미지로 대체하지 않고 중단합니다.
+
+일루전링 외형은 `stand1`·`stand2`·`sit`·`prone`의 4개 동작을 원본 반지에서 추출합니다. 별도 얼굴이 없는 완성 변신 이미지이므로 가상의 `_blink` 동작을 만들지 않으며 `face-variant-map.json`은 비어 있습니다. 프리뷰는 변신 원본 프레임 그대로이며 `preview-origins.json`의 `sourcePath`가 원본을 가리킵니다.
+
+### 기존 DLL로 여러 캐릭터 추출
+
+PowerShell 7의 `Build/Query-KmsNativeAppearanceBatch.ps1`과 `Build/Export-KmsNativeAvatarBatch.ps1`은 이미 있는 `UnityExportSmoke` 출력 DLL을 재사용합니다. 첫 단계는 요청한 정확한 이름만 KMS에서 조회해 `lookup-results.json`과 캐릭터별 decoded appearance JSON을 저장합니다. 키 읽기는 기존 DLL 내부에서 처리하며, API 응답·설정 내용·예외 원문을 로그에 쓰지 않습니다. 조회 사이에는 기본 650ms를 기다립니다. `lookupFailed`는 조회 실패 표시이며 캐릭터가 존재하지 않는다는 확정 판정이 아닙니다.
+
+두 번째 단계는 저장된 외형 정보로 원본 WZ를 한 번 열고 순서대로 추출합니다. API 요청이나 키 읽기, 프로젝트 빌드를 수행하지 않습니다. 기존 DLL에 없는 원피스 가시성 수정·피부 ID 0~99 검사·고정 표정 출처 인덱스 보정을 적용합니다. 이미 새 DLL에서 보정된 고정 표정 메타데이터는 그대로 보존합니다.
+
+```powershell
+$batchCache = Join-Path '.tmp/kms-native-batch' ([Guid]::NewGuid().ToString('N'))
+./Build/Query-KmsNativeAppearanceBatch.ps1 -CharacterNames @('정확한이름1', '정확한이름2') `
+  -OutputDirectory $batchCache -SettingsPath './WzComparerR2/bin/Release/net8.0-windows/Setting.config'
+./Build/Export-KmsNativeAvatarBatch.ps1 -AppearanceCacheDirectory $batchCache `
+  -BaseWzPath 'D:/Nexon/Maple/Data/Base/Base.wz'
+```
+
+다른 DLL 출력 위치는 두 도구의 `ReaderAssemblyPath`로 지정합니다. 조회 캐시는 매번 새 빈 폴더를 사용하고, 추출 도구도 이미 있는 캐릭터 출력 폴더를 덮어쓰지 않습니다. 각 캐릭터에 별도 폴더를 만들어 같은 외형이나 `previews`의 출처가 섞이지 않게 합니다. `export-results.json`의 성공 항목 `output`이 Unity에 가져올 최종 번들 경로입니다. 일반 외형의 8개 기본·blink 동작 또는 새 DLL의 일루전링 외형 4개 원본 동작, 장착 슬롯/ID, PNG 해시와 원본 출처·프리뷰 파일을 확인합니다.
+
+일루전링 렌더 소스가 포함되지 않은 이전 DLL에서 사람이 출력되면 `Build/Export-KmsNativeIllusionAvatar.ps1`을 사용합니다. 이미 추출한 장착 목록에서 정확한 일루전링을 확인해 원본 WZ를 읽으며 추가 KMS 조회나 빌드 없이 별도 변신 번들을 생성합니다. 원래 사람 외형 번들은 근거 자료로 보존합니다.
+
+```powershell
+$illusionRoot = Join-Path '.tmp/kms-native-illusion' ([Guid]::NewGuid().ToString('N'))
+./Build/Export-KmsNativeIllusionAvatar.ps1 -NativeBundleDirectory @('기존장착번들경로1', '기존장착번들경로2') `
+  -OutputDirectory $illusionRoot -BaseWzPath 'D:/Nexon/Maple/Data/Base/Base.wz'
+```
+
+`illusion-export-results.json`의 `output`이 가져올 변신 번들입니다. `illusion-ring-geometry.json`은 원본·실제 캔버스 경로, PNG/RGBA 해시, 원점·시간·투명 영역 경계와 원본 픽셀 기준 머리/발 위치를 기록합니다. 머리 위치는 불투명 영역의 위쪽보다 4픽셀 위, 발 위치는 불투명 영역의 아래쪽 중앙입니다. PNG는 크기 변경·합성 없이 원본으로 보존하며 모든 RGBA 픽셀을 비교합니다.
+
+얼굴 표정을 같은 캔버스에 정렬할 때는 `face-variant-map.json`의 실제 이미지 왼쪽 위 `(x-originX, y-originY)` 차이를 사용합니다. `originX/Y`만 비교하면 포즈에 적용된 원래 위치 차이를 놓칠 수 있습니다. 표정이 기본 얼굴 경계를 벗어나면 기본 얼굴과 표정을 함께 투명한 합집합 캔버스로 늘리고 앵커·원점을 맞춰 원본 픽셀 위치를 보존합니다. 원본 얼굴 픽셀을 자르지 않습니다.
 
 ## MapleLive 의자 원본 추출
 

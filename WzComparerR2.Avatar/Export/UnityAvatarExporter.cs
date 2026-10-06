@@ -23,8 +23,12 @@ namespace WzComparerR2.Avatar.Export
     {
         private readonly AvatarCanvas avatar;
         private readonly List<WzEquippedItem> equipment;
+        private readonly AvatarPart illusionRing;
+        private readonly WzEquippedItem illusionEquipment;
 
         public string AppearanceId { get; }
+        public bool RendersIllusionRing => illusionRing != null;
+        public int? ActiveIllusionRingId => illusionRing?.ID;
 
         public UnityAvatarExporter(AvatarCanvas source, StringLinker strings = null)
         {
@@ -32,6 +36,15 @@ namespace WzComparerR2.Avatar.Export
             // A separate skin cache is essential: preview bitmaps belong to the UI.
             avatar = Snapshot(source);
             equipment = UnityAvatarEquipment.Capture(avatar, strings);
+            WzEquippedItem[] activeRings = equipment.Where(item => !item.isSkill
+                && item.illusionRingClassificationKnown && item.isIllusionRing).ToArray();
+            if (activeRings.Length > 1)
+                throw new InvalidOperationException("표시할 환상 반지가 여러 개입니다. 원본 우선순위를 확인할 수 없어 임의로 선택하지 않습니다.");
+            if (activeRings.Length == 1)
+            {
+                illusionEquipment = activeRings[0];
+                illusionRing = avatar.Parts[illusionEquipment.slotIndex];
+            }
             var description = new WzEntity();
             DescribeOutfit(description);
             string canonical = string.Concat(description.metadata.OrderBy(item => item.key, StringComparer.Ordinal)
@@ -50,6 +63,18 @@ namespace WzComparerR2.Avatar.Export
             string[] names = actionNames?.Where(name => !string.IsNullOrEmpty(name))
                 .Distinct(StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
             if (names.Length == 0) throw new InvalidOperationException("내보낼 동작이 없습니다.");
+
+            if (RendersIllusionRing)
+            {
+                var ringEntity = new WzEntity
+                {
+                    id = AppearanceId, kind = "avatar", displayName = "현재 캐릭터",
+                    sourcePath = illusionRing.Node.FullPathToFile
+                };
+                DescribeOutfit(ringEntity);
+                return UnityAvatarIllusionExporter.Export(illusionRing, illusionEquipment, ringEntity,
+                    outputDirectory, names, cancellationToken, reportProgress);
+            }
 
             using (var writer = new UnityExportWriter(outputDirectory, AppearanceId, "avatar",
                 avatar.Body.Node.FullPathToFile, cancellationToken))
@@ -349,6 +374,15 @@ namespace WzComparerR2.Avatar.Export
             entity.equipment.AddRange(equipment);
             Meta(entity.metadata, "equipmentScope", "current-outfit");
             Meta(entity.metadata, "maskingScope", "current-combination");
+            if (RendersIllusionRing)
+            {
+                Meta(entity.metadata, "rendering/mode", "illusion-ring");
+                Meta(entity.metadata, "rendering/illusionRingItemId", illusionEquipment.itemId);
+                Meta(entity.metadata, "rendering/illusionRingSlot", illusionEquipment.slotIndex);
+                Meta(entity.metadata, "rendering/illusionRingSource", illusionRing.Node.FullPathToFile);
+                Meta(entity.metadata, "rendering/sourceActionAliases", illusionRing.Node.Nodes["stand2"] == null ? "stand2=stand1" : "");
+                Meta(entity.metadata, "rendering/faceVariants", "none; the original ring supplies a complete body sprite");
+            }
             Meta(entity.metadata, "capType", avatar.CapType);
             Meta(entity.metadata, "emotion", avatar.EmotionName ?? "default");
             Meta(entity.metadata, "earType", avatar.EarType);

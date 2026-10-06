@@ -71,6 +71,11 @@ internal static class Smoke
                 using var data = new DataSource(args[1]);
                 AvatarEquipmentSmoke.RunOriginal(data.Find);
             }
+            else if (args[0] == "illusion")
+            {
+                using var data = new DataSource(args[1]);
+                AvatarIllusionSmoke.RunOriginal(data.Find, args[2]);
+            }
             else if (args[0] == "kms-avatar")
             {
                 if (args.Length < 4) throw new ArgumentException("kms-avatar <Base.wz> <character-name> <Setting.config> [output-root]");
@@ -94,6 +99,7 @@ internal static class Smoke
     {
         AvatarEquipmentSmoke.Run();
         KmsAvatarExportSmoke.Run();
+        AvatarIllusionSmoke.Run(output);
         EntitySmoke.Run(output);
         using (var writer = new UnityExportWriter(output, "synthetic", "mob", "synthetic/origin-delay"))
         using (var bitmap = new Bitmap(8, 12))

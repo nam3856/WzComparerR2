@@ -92,6 +92,12 @@ internal static class AvatarEquipmentSmoke
         Smoke.Assert(roundTrip.hasEquipmentMetadata && roundTrip.equipment.Count == 29
             && roundTrip.equipment.Single(item => item.slot == "Ring2").isIllusionRing, "Equipment manifest round-trip lost inventory/classification");
 
+        bool multipleRings = false;
+        try { _ = new UnityAvatarExporter(avatar, strings); }
+        catch (InvalidOperationException) { multipleRings = true; }
+        Smoke.Assert(multipleRings, "A hidden equipped illusion ring was ignored when choosing between multiple verified rings");
+        // Localized-name identity is independent of the ambiguous-rendering case.
+        avatar.Ring1.Node.Nodes["info"].Nodes["illusionGrade"].Value = -1;
         var exporter = new UnityAvatarExporter(avatar, strings);
         strings.StringEqp[1114500].Name = "다른 이름";
         Smoke.Assert(new UnityAvatarExporter(avatar, strings).AppearanceId == exporter.AppearanceId,

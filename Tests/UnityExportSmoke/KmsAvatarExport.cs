@@ -200,6 +200,40 @@ internal static class KmsAvatarExport
         UnpackedAvatarData appearance, string outputRoot)
     {
         string[] actions = { "stand1", "stand2", "sit", "prone" };
+        var activeAppearance = new UnityAvatarExporter(avatar, strings);
+        if (activeAppearance.RendersIllusionRing)
+        {
+            string ringOutput = Path.GetFullPath(Path.Combine(outputRoot, activeAppearance.AppearanceId));
+            var ringManifest = activeAppearance.Export(ringOutput, actions);
+            var ringEntity = ringManifest.entities.Single();
+            if (!actions.All(action => ringEntity.clips.Any(clip => clip.name == action)))
+                throw new InvalidDataException("환상 반지의 기본/앉기/엎드리기 원본 동작이 없습니다.");
+            ringEntity.displayName = name;
+            ringEntity.defaultAction = "stand1";
+            ringEntity.metadata.Add(new WzMetadata { key = "kms/characterName", value = name });
+            ringEntity.metadata.Add(new WzMetadata { key = "kms/appearanceVersion", value = appearance.Version.ToString(CultureInfo.InvariantCulture) });
+            ringEntity.metadata.Add(new WzMetadata { key = "kms/source", value = "KMS character/basic decoded appearance + original Base.wz" });
+            File.WriteAllText(Path.Combine(ringOutput, "wz-unity.json"), JsonConvert.SerializeObject(ringManifest, Formatting.Indented));
+            WriteFaceVariantMap(ringManifest, ringOutput); // Empty: the source has no separate face sprites.
+            string previews = Path.Combine(Path.GetFullPath(outputRoot), "previews");
+            Directory.CreateDirectory(previews);
+            var assets = ringManifest.assets.ToDictionary(asset => asset.id, StringComparer.Ordinal);
+            var origins = new List<object>();
+            foreach (var clip in ringEntity.clips.Where(clip => clip.name != "stand2"))
+                for (int index = 0; index < clip.tracks[0].frames.Count; index++)
+                {
+                    var frame = clip.tracks[0].frames[index];
+                    var asset = assets[frame.assetId];
+                    string file = clip.name + "-" + index.ToString(CultureInfo.InvariantCulture) + ".png";
+                    File.Copy(Path.Combine(ringOutput, asset.file), Path.Combine(previews, file));
+                    origins.Add(new { action = clip.name, frameIndex = index, file,
+                        sourcePath = frame.sourcePath, asset.width, asset.height, frame.originX, frame.originY, frame.delayMs });
+                }
+            File.WriteAllText(Path.Combine(previews, "preview-origins.json"), JsonConvert.SerializeObject(origins, Formatting.Indented));
+            Console.WriteLine("KMS_ILLUSION_VARIANTS clips=" + ringEntity.clips.Count + " assets=" + ringManifest.assets.Count
+                + " equipment=" + ringEntity.equipment.Count + " warnings=" + ringManifest.warnings.Count);
+            return ringOutput;
+        }
         foreach (string action in actions)
             if (avatar.GetActionFrames(action).Length == 0) throw new InvalidDataException("원본 동작이 없습니다: " + action);
         string baseEmotion = "default";
