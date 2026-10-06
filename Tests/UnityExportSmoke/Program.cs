@@ -71,6 +71,12 @@ internal static class Smoke
                 using var data = new DataSource(args[1]);
                 AvatarEquipmentSmoke.RunOriginal(data.Find);
             }
+            else if (args[0] == "kms-avatar")
+            {
+                if (args.Length < 4) throw new ArgumentException("kms-avatar <Base.wz> <character-name> <Setting.config> [output-root]");
+                KmsAvatarExport.Run(args[1], args[2], args[3], args.Length > 4 ? args[4]
+                    : Path.Combine(repo, ".tmp/kms-avatar-export", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8)));
+            }
             else if (args[0] == "gui") GuiSmoke.Run(args[1], args[2]);
             else if (args[0] == "reactor")
             {
@@ -87,6 +93,7 @@ internal static class Smoke
     private static void Synthetic(string output)
     {
         AvatarEquipmentSmoke.Run();
+        KmsAvatarExportSmoke.Run();
         EntitySmoke.Run(output);
         using (var writer = new UnityExportWriter(output, "synthetic", "mob", "synthetic/origin-delay"))
         using (var bitmap = new Bitmap(8, 12))

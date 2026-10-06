@@ -24,6 +24,36 @@ MapleT는 `E:/nexon/MapleT/Data/Base/Base.wz`를 엽니다. 최신 upstream의 K
 
 추출은 별도 임시 폴더에서 완성한 뒤 기존 결과를 교체합니다. 취소·실패하면 기존 결과를 유지합니다. 같은 ID의 추출 결과만 갱신하며, 추출기가 만들지 않은 파일도 보존합니다. 경고가 있으면 완료 메시지와 보고서에서 누락 원본 경로·사유를 확인할 수 있습니다.
 
+## KMS 캐릭터 이름으로 CLI 추출
+
+`Tests/UnityExportSmoke`의 `kms-avatar` 명령은 KMS 캐릭터 이름을 조회하고, 반환된 외형 코드를 설치된 원본 `Base.wz`의 부위·프리즘·혼합색·장비로 렌더합니다. 넥슨이 제공하는 캐릭터 미리보기 이미지를 잘라 쓰지 않습니다. `Setting.config` 파일 경로를 인수로 받으며, 키 값은 파일의 `WcR2/nexonOpenAPIKey`에서 읽습니다. 키 값과 설정 내용은 CLI 출력에 포함하지 않으며 조회 실패도 고정된 오류 메시지로 처리합니다.
+
+이 명령은 GUI 실행 파일과 별개의 콘솔 도구입니다. 아래 예시는 최신 소스를 반영한 `Tests/UnityExportSmoke` Release 출력 DLL이 있을 때 실행합니다. 기존 DLL에는 이후 소스 수정이 포함되지 않으므로, 수정된 CLI를 사용하려면 다음 빌드 때 이 프로젝트를 다시 빌드해야 합니다. .NET 8 런타임이 있는 경우에는 `--roll-forward Major`를 생략할 수 있습니다.
+
+저장소 루트의 PowerShell에서 실행하며, 출력 폴더는 실행마다 새 경로를 지정합니다. `previews`와 같은 외형의 결과가 서로 덮어써지지 않도록 이전 출력 폴더를 재사용하지 않습니다.
+
+```powershell
+$kmsOutputRoot = Join-Path '.tmp/kms-avatar-export' ([Guid]::NewGuid().ToString('N'))
+dotnet --roll-forward Major .\Tests\UnityExportSmoke\bin\Release\net8.0-windows\UnityExportSmoke.dll kms-avatar `
+  'D:\MapleData\Base\Base.wz' '캐릭터 이름' `
+  '.\WzComparerR2\bin\Release\net8.0-windows\Setting.config' $kmsOutputRoot
+```
+
+결과는 출력 폴더 아래 외형 해시 폴더에 저장됩니다. 기본 표정과 원본 `blink`의 `stand1`·`stand2`·`sit`·`prone` 동작, 전체 장착 메타데이터를 하나의 `wz-unity.json`에 포함합니다. `face-variant-map.json`은 몸 포즈별 얼굴 이미지·좌표·원본 경로를 기록하고, `previews`의 PNG와 `preview-origins.json`은 원본 렌더 비교용입니다. `.kms-variants-*` 폴더는 합치기 전 추출의 근거 자료이며, Unity에는 최종 `wz-unity.json`이 있는 외형 해시 폴더만 가져옵니다. 지원하지 않는 외형 코드나 필요한 원본이 없으면 임의 이미지로 대체하지 않고 중단합니다.
+
+## MapleLive 의자 원본 추출
+
+`Build/Export-MapleLiveChairAssets.ps1`은 기존 `UnityExportSmoke` 출력 DLL을 읽어 의자 이름·아이템 ID를 찾고 원본 UOL/outlink PNG를 추출합니다. 빌드나 API 조회·설정 파일 접근은 하지 않습니다. PowerShell 7과 기존 DLL이 필요하며, 다른 환경에서는 `ReaderAssemblyPath`, `BaseWzPath`, `SpriteMetaTemplate`, 출력 경로를 지정합니다.
+
+```powershell
+./Build/Export-MapleLiveChairAssets.ps1 -ItemName '하늘색 나무 의자' -ItemId 3010001 `
+  -SpritePrefix SkyBlueWoodChair -OutputDirectory 'D:/Github/MapleLive/Assets/LiveChat/Chairs/SkyBlueWoodChair'
+./Build/Export-MapleLiveChairAssets.ps1 -ItemName 'RISE 감상 의자 : 독서' -ItemId 3018487 `
+  -SpritePrefix RiseReadingChair -OutputDirectory 'D:/Github/MapleLive/Assets/LiveChat/Chairs/RiseReadingChair'
+```
+
+이름이 같은 아이템이 여럿이면 ID를 지정합니다. 원본 PNG·Unity Sprite 메타와 JSON에 원점·앞뒤 레이어·프레임 시간·`bodyRelMove`·장비 숨김 설정·해시를 보존하며 원본 AvatarCanvas 합성 프리뷰는 Assets 밖에 저장합니다. 현재 지원하는 기본 좌표 방식 밖의 특수 의자는 위치를 추정하지 않고 중단합니다. MapleLive의 의자 프로필은 이 원본 자료에 맞춰 별도로 연결합니다.
+
 ## Unity로 가져오기
 
 재사용 가능한 UPM 패키지는 `UnityPackages/com.nam3856.wz-importer`에 있습니다. MapleLike에는 이 로컬 패키지가 연결되어 있습니다. 다른 프로젝트에서는 Package Manager의 **Install package from disk**로 이 폴더의 `package.json`을 선택합니다.
@@ -77,6 +107,7 @@ MapleLike의 기존 Linear 색 공간은 유지합니다. 반투명 이펙트가
 synthetic [출력폴더]
 data <Base.wz>
 avatar <Base.wz> <출력폴더>
+kms-avatar <Base.wz> <캐릭터이름> <Setting.config> [새출력폴더]
 export <Base.wz> <출력폴더> [맵ID...]
 inspect <Base.wz> <WZ경로...>
 mapcheck <Base.wz> <출력폴더>

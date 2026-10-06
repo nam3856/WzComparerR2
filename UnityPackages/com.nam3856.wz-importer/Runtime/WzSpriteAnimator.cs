@@ -28,6 +28,22 @@ namespace WzComparerR2.Unity
         /// <summary>Optional final sprite substitution; does not change any animation clocks or anchors.</summary>
         [field: NonSerialized]
         public Func<Sprite, Sprite> SpriteResolver { get; set; }
+        /// <summary>Optional visibility mask. Hidden tracks retain their independent clocks.</summary>
+        [field: NonSerialized]
+        public Func<WzAnimationTrack, bool> TrackVisibilityResolver { get; set; }
+        [NonSerialized] private Vector2 renderOffset;
+        /// <summary>Local graphic offset before facing reflection. Leaves root, feet, anchors and animation clocks unchanged.</summary>
+        public Vector2 RenderOffset
+        {
+            get => renderOffset;
+            set
+            {
+                if (float.IsNaN(value.x) || float.IsInfinity(value.x) || float.IsNaN(value.y) || float.IsInfinity(value.y) ||
+                    renderOffset == value) return;
+                renderOffset = value;
+                ApplyFrames();
+            }
+        }
         public float Speed { get => speed; set => speed = Mathf.Max(0, value); }
         public bool FlipX { get => flipX; set { flipX = value; ApplyFrames(); } }
         /// <summary>Setting this overrides the authored loop policy until UseAuthoredLoop is called.</summary>
@@ -225,6 +241,7 @@ namespace WzComparerR2.Unity
             foreach (var state in states)
             {
                 foreach (var renderer in state.renderers.Values) if (renderer != null) renderer.enabled = false;
+                if (TrackVisibilityResolver != null && !TrackVisibilityResolver(state.track)) continue;
                 if (state.track.frames.Length == 0) continue;
                 if (state.elapsed < 0) continue;
                 var frame = state.track.frames[Mathf.Clamp(state.frameIndex, 0, state.track.frames.Length - 1)];
@@ -247,7 +264,8 @@ namespace WzComparerR2.Unity
                     var origin = pose != null && pose.overrideSprite ? pose.origin : slice.origin;
                     var extent = sprite == null ? Vector2.zero : sprite.rect.size / (2 * animationSet.pixelsPerUnit);
                     var centreOffset = Vector2.Scale(new Vector2(extent.x - origin.x, -extent.y - origin.y), slice.scale);
-                    var position = (pose == null ? slice.anchor : pose.anchor) + (Vector2)(Quaternion.Euler(0, 0, slice.rotation) * centreOffset);
+                    var position = (pose == null ? slice.anchor : pose.anchor) +
+                        (Vector2)(Quaternion.Euler(0, 0, slice.rotation) * centreOffset) + renderOffset;
                     // Slice position denotes sprite centre. Reflecting it around the root keeps the WZ anchor fixed.
                     renderer.transform.localPosition = new Vector3(flipX ? -position.x : position.x, position.y, 0);
                     renderer.transform.localScale = new Vector3(slice.scale.x, slice.scale.y, 1);
