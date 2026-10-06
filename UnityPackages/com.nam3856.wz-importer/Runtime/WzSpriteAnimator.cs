@@ -54,6 +54,7 @@ namespace WzComparerR2.Unity
             public WzAnimationTrack track;
             public double elapsed;
             public bool finished;
+            public bool repeatMiddleFrame;
             public int frameIndex;
             public float fraction;
             public readonly Dictionary<string, SpriteRenderer> renderers = new Dictionary<string, SpriteRenderer>();
@@ -101,7 +102,11 @@ namespace WzComparerR2.Unity
             foreach (var track in next.tracks)
             {
                 if (track.frames.Length == 0) continue;
-                var state = new TrackState { track = track, elapsed = -track.startMs };
+                var state = new TrackState
+                {
+                    track = track, elapsed = -track.startMs,
+                    repeatMiddleFrame = RepeatsMiddleFrame(next.name, track)
+                };
                 states.Add(state);
                 CreateRenderers(state);
             }
@@ -123,6 +128,7 @@ namespace WzComparerR2.Unity
                 foreach (var renderer in state.renderers.Values) renderer.enabled = false;
                 state.renderers.Clear();
                 state.track = track;
+                state.repeatMiddleFrame = RepeatsMiddleFrame(source.name, track);
                 state.elapsed = -track.startMs;
                 state.frameIndex = 0;
                 state.fraction = 0;
@@ -145,18 +151,11 @@ namespace WzComparerR2.Unity
             foreach (var state in states)
             {
                 double time = Math.Max(0, milliseconds - state.track.startMs);
-                double duration = state.track.DurationMilliseconds;
+                double duration = PlaybackDuration(state);
                 if (duration <= 0) continue;
                 time = Loop && state.track.loop ? time % duration : Math.Min(time, duration);
                 state.elapsed = milliseconds < state.track.startMs ? -1 : time;
-                for (int index = 0; index < state.track.frames.Length; index++)
-                {
-                    state.frameIndex = index;
-                    double delay = Math.Max(1, state.track.frames[index].durationMs);
-                    if (time < delay || index == state.track.frames.Length - 1)
-                    { state.fraction = (float)Math.Min(1, time / delay); break; }
-                    time -= delay;
-                }
+                SelectFrame(state, time);
             }
             ApplyFrames();
             return true;
@@ -171,34 +170,63 @@ namespace WzComparerR2.Unity
             actionElapsed += seconds * 1000d * speed;
             foreach (var state in states)
             {
-                var duration = state.track.DurationMilliseconds;
+                var duration = PlaybackDuration(state);
                 if (duration <= 0) continue;
                 var shouldLoop = Loop && state.track.loop;
                 state.elapsed += seconds * 1000d * speed;
                 if (shouldLoop && state.elapsed >= 0) state.elapsed %= duration;
                 else if (state.elapsed >= duration) { state.elapsed = duration; state.finished = true; }
-                double remaining = Math.Max(0, state.elapsed);
-                state.frameIndex = 0;
-                for (int i = 0; i < state.track.frames.Length; i++)
-                {
-                    var frameDuration = Math.Max(1, state.track.frames[i].durationMs);
-                    state.frameIndex = i;
-                    if (remaining < frameDuration || i == state.track.frames.Length - 1)
-                    {
-                        state.fraction = (float)Math.Min(1d, remaining / frameDuration);
-                        break;
-                    }
-                    remaining -= frameDuration;
-                }
+                SelectFrame(state, Math.Max(0, state.elapsed));
                 // The first track is the action clock. Independent looping effects never prevent completion.
                 if (!anyPrimary) { primaryFinished = state.finished; anyPrimary = true; }
             }
             ApplyFrames();
-            if (!Loop && anyPrimary && (currentAction.durationMs > 0 ? actionElapsed >= currentAction.durationMs : primaryFinished))
+            double actionDuration = currentAction.durationMs;
+            if (states.Count > 0 && states[0].repeatMiddleFrame)
+                actionDuration += Math.Max(1, states[0].track.frames[1].durationMs);
+            if (!Loop && anyPrimary && (currentAction.durationMs > 0 ? actionElapsed >= actionDuration : primaryFinished))
             {
                 IsPlaying = false;
                 completed.Invoke();
                 Completed?.Invoke(CurrentAction);
+            }
+        }
+
+        private static bool RepeatsMiddleFrame(string actionName, WzAnimationTrack track)
+        {
+            if (string.IsNullOrEmpty(actionName) || track.frames.Length != 3) return false;
+            bool blinkAction = actionName.EndsWith("_blink", StringComparison.Ordinal);
+            if (blinkAction)
+                actionName = actionName.Substring(0, actionName.Length - "_blink".Length);
+            if (actionName != "stand1" && actionName != "stand2" && actionName != "stand3" && actionName != "fly")
+                return false;
+            // Body poses and their equipment move 0,1,2,1. Eyes and item effects retain
+            // their original independent clocks, even when they also contain three frames.
+            foreach (var entry in track.metadata ?? Array.Empty<WzUnity.WzMetadata>())
+                if (entry.key == "kind")
+                    return entry.value == "clock" || entry.value == "body" || (entry.value == "avatar" && !blinkAction);
+            // Legacy flattened blink clips are an eye-expression timeline, not body poses.
+            return track.name == "body" || (track.name != null && track.name.StartsWith("part/", StringComparison.Ordinal)) ||
+                (!blinkAction && track.name == "flattened-character");
+        }
+
+        private static double PlaybackDuration(TrackState state) => state.track.DurationMilliseconds +
+            (state.repeatMiddleFrame ? Math.Max(1, state.track.frames[1].durationMs) : 0);
+
+        private static void SelectFrame(TrackState state, double remaining)
+        {
+            int steps = state.track.frames.Length + (state.repeatMiddleFrame ? 1 : 0);
+            for (int step = 0; step < steps; step++)
+            {
+                int index = state.repeatMiddleFrame && step == 3 ? 1 : step;
+                double duration = Math.Max(1, state.track.frames[index].durationMs);
+                state.frameIndex = index;
+                if (remaining < duration || step == steps - 1)
+                {
+                    state.fraction = (float)Math.Min(1, remaining / duration);
+                    return;
+                }
+                remaining -= duration;
             }
         }
 
