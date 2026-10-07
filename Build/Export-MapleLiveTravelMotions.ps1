@@ -5,6 +5,7 @@ param(
     [string]$StoredCharacterName,
     [string[]]$StoredActions = @('walk2'),
     [switch]$DeathOnly,
+    [string[]]$DeathCharacterNames = @('깽쿤'),
     [string]$OutputDirectory,
     [string]$BaseWzPath = 'D:/Nexon/Maple/Data/Base/Base.wz',
     [string]$ReaderAssemblyPath = [IO.Path]::Combine($PSScriptRoot, '../Tests/UnityExportSmoke/bin/Release/net8.0-windows/UnityExportSmoke.dll'),
@@ -184,7 +185,9 @@ try {
         foreach ($warning in $original.warnings) { $writer.Warn($warning.sourcePath, $warning.reason) }
         $added = @(); $missing = @(); $appearanceMatched = $false
         $isRing = @($entity.metadata | Where-Object { $_.key -eq 'rendering/mode' -and $_.value -eq 'illusion-ring' }).Count -eq 1
-        if ($DeathOnly -and ($isRing -or $entity.displayName -cne '깽쿤')) { throw 'Death-only correction requires the original Kkaengkun native bundle.' }
+        $exportDeath = $entity.displayName -cin $DeathCharacterNames
+        if ($DeathOnly -and ($isRing -or !$exportDeath)) { throw 'Death-only correction requires an explicitly selected native outfit bundle.' }
+        if ($isRing -and $exportDeath) { throw 'Equipped-head death requires a native human outfit; an illusion ring cannot be replaced with invented human layers.' }
         if ($isRing) {
             $rings = @($entity.equipment | Where-Object { $_.illusionRingClassificationKnown -and $_.isIllusionRing -and !$_.isSkill })
             if ($rings.Count -ne 1) { throw 'One verified original illusion ring is required.' }
@@ -236,7 +239,7 @@ try {
                     $entity.clips.Add($clip); $added += $clip.name
                 }
             }
-            if ($entity.displayName -ceq '깽쿤') {
+            if ($exportDeath) {
                 # dead/0/body is the ghost BODY, with an authored neck anchor.
                 # Its face=1 requests the equipped front head, default face and
                 # hair/cap attachments. Use the native bone renderer, including
@@ -262,7 +265,7 @@ try {
             $avatar.ClearSkinCache(); $avatar = $null
         }
         Assert-OldPreserved $before $entity $oldCount $(if ($DeathOnly) { [string[]]@('dead') } else { [string[]]@() })
-        if ($entity.displayName -ceq '깽쿤') {
+        if ($exportDeath) {
             $dead = @($entity.clips | Where-Object name -eq 'dead')
             $body = @($dead[0].tracks | Where-Object id -CEQ 'part/0/body/0')
             $head = @($dead[0].tracks | Where-Object id -CEQ 'part/1/head/0')

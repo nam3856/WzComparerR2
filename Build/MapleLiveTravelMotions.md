@@ -73,6 +73,44 @@ preserves all other 14 actions, PNGs, outfit metadata and face-map bytes. A nati
 reference preview is written beside the merged bundle in
 `previews/dead-with-equipped-head.png`.
 
+`-DeathCharacterNames` explicitly selects native human outfits that need this
+equipped death action; its default remains `@('깽쿤')`. A selected illusion-ring
+appearance is rejected rather than replacing its complete native sprite with
+human head/body layers. Verification accepts the same explicit list and checks
+the selected outfit's actual body/head source metadata. Native default/invalid
+prism values leave raw pixels untouched, as AvatarCanvas does.
+
+## Event-only guest 만사기찬 (2026-10-07)
+
+The saved KMS settings were used for one lookup of the exact name `만사기찬`;
+no key or response headers are emitted. The character has 19 equipped parts and
+no illusion ring. Body `Character/00002016.img`, head `Character/00012016.img`,
+face `Character/Face/00051120.img`, hair `Character/Hair/00048520.img`, and cap
+`Character/Cap/01007232.img` retain native attachment, colour and effect options.
+
+Reproduce the source-only guest export in fresh directories:
+
+```powershell
+./Build/Query-KmsNativeAppearanceBatch.ps1 `
+  -CharacterNames @('만사기찬') -OutputDirectory 'D:/fresh/guest-lookup'
+./Build/Export-KmsNativeAvatarBatch.ps1 -AppearanceCacheDirectory 'D:/fresh/guest-lookup'
+./Build/Export-MapleLiveTravelMotions.ps1 `
+  -NativeBundleDirectory @('D:/fresh/guest-lookup/01-만사기찬/avatar-327d407a39022f981468e53b') `
+  -DeathCharacterNames @('만사기찬') -OutputDirectory 'D:/fresh/guest-motions'
+./Build/Verify-MapleLiveTravelMotions.ps1 `
+  -ResultFile @('D:/fresh/guest-motions/travel-motion-results.json') `
+  -DeathCharacterNames @('만사기찬') -VerificationFile 'D:/fresh/guest-verification.json'
+```
+
+The 15-action result includes stand1/stand2/sit/prone, their blink variants,
+walk1/walk2/jump and their blink variants, and native non-looping equipped-head
+`dead`. Its 10 death tracks include original ghost body, head, face, hair and cap;
+it does not omit the character's head or invent a separate death animation.
+Source verification passed 748 checks, all 95 PNGs, and exact original body/head
+RGBA comparisons. Import only the returned merged bundle as an initially hidden
+event guest. It must not be registered in the regular chat-user bindings or the
+normal 30-character actor list.
+
 ## Current 30-character inventory (2026-10-07)
 
 | Character | Original motions prepared or already present |
@@ -130,8 +168,8 @@ dimensions, original origins and action delays. Death checks require the native
 neck→head→brow attachments, original positioned head/hair/cap/face, native 120 ms
 clock and exact body/head RGBA after the equipped prism. The original travel
 export passed 24,711 checks across 27 prepared native actors and 3,118 PNG checks;
-the subsequent death-head correction passed 593 checks, preserved all 14 other
+the subsequent death-head correction passed 594 checks, preserved all 14 other
 actions and 131 PNGs, and compared both body/head prism results in RGBA. This is
 source verification. The complete 27-actor source set with this correction
-passed 24,357 checks, 3,119 PNG checks and 16 original RGBA frame comparisons.
+passed 24,358 checks, 3,119 PNG checks and 16 original RGBA frame comparisons.
 Unity import, runtime preview and project tests belong to the MapleLive integration.

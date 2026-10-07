@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string[]]$ResultFile,
     [string]$VerificationFile,
+    [string[]]$DeathCharacterNames = @('깽쿤'),
     [string]$BaseWzPath = 'D:/Nexon/Maple/Data/Base/Base.wz',
     [string]$ReaderAssemblyPath = [IO.Path]::Combine($PSScriptRoot, '../Tests/UnityExportSmoke/bin/Release/net8.0-windows/UnityExportSmoke.dll')
 )
@@ -95,7 +96,13 @@ function Verify-PrismCanvas($Frame, $Asset, [string]$Directory, $Entity, [int]$P
         $values = @{}
         foreach ($entry in $Entity.metadata) { $values[$entry.key] = $entry.value }
         $prefix = 'parts/' + $PrismSlot + '/prism/Default/'
-        $transformed = [WzComparerR2.AvatarCommon.Prism]::Apply($original, [int]$values[$prefix + 'type'], [int]$values[$prefix + 'hue'], [int]$values[$prefix + 'saturation'], [int]$values[$prefix + 'brightness'], $false, [bool]::Parse($values[$prefix + 'convertPureBlack']))
+        $prismData = [WzComparerR2.AvatarCommon.PrismData]::new()
+        $prismData.Set([int]$values[$prefix + 'type'], [int]$values[$prefix + 'hue'], [int]$values[$prefix + 'saturation'], [int]$values[$prefix + 'brightness'], [bool]::Parse($values[$prefix + 'convertPureBlack']))
+        # AvatarCanvas leaves the raw bitmap untouched when native PrismData is
+        # invalid/default. An unconditional colour pass changes transparent RGB.
+        $transformed = if ($prismData.Valid) {
+            [WzComparerR2.AvatarCommon.Prism]::Apply($original, $prismData.Type, $prismData.Hue, $prismData.Saturation, $prismData.Brightness, $false, $prismData.ConvertPureBlack)
+        } else { $original.Clone() }
         Assert-Source ($transformed.Width -eq $exported.Width -and $transformed.Height -eq $exported.Height) 'native-prism-canvas-dimensions-changed'
         for ($y = 0; $y -lt $transformed.Height; $y++) {
             for ($x = 0; $x -lt $transformed.Width; $x++) {
@@ -119,8 +126,11 @@ function Verify-EquippedGhost($Clip, $Entity, $Assets, [string]$Directory, $Befo
     Assert-Source (!$Clip.loop -and $Clip.durationMs -eq 120 -and $clock.Count -eq 1 -and $clock[0].frames.Count -eq 1 -and $clock[0].frames[0].delayMs -eq 120) 'native-ghost-clock-changed'
     Assert-Source ($body.Count -eq 1 -and $head.Count -eq 1 -and $hair.Count -gt 0 -and $face.Count -eq 1 -and $cap.Count -gt 0) 'ghost-equipped-head-hair-face-cap-missing'
     $bodyFrame = $body[0].frames[0]; $headFrame = $head[0].frames[0]
-    Assert-Source ($body[0].frames.Count -eq 1 -and $bodyFrame.visible -and $bodyFrame.sourcePath -ceq 'Character\00002042.img\dead\0\body') 'wrong-original-ghost-body'
-    Assert-Source ($head[0].frames.Count -eq 1 -and $headFrame.visible -and $headFrame.sourcePath -ceq 'Character\00012042.img\front\head') 'wrong-equipped-ghost-head'
+    $bodySource = @($Entity.metadata | Where-Object key -CEQ 'parts/0/source')
+    $headSource = @($Entity.metadata | Where-Object key -CEQ 'parts/1/source')
+    Assert-Source ($bodySource.Count -eq 1 -and $headSource.Count -eq 1 -and $bodySource[0].value -ceq $Entity.sourcePath) 'equipped-ghost-original-body-head-metadata-missing'
+    Assert-Source ($body[0].frames.Count -eq 1 -and $bodyFrame.visible -and $bodyFrame.sourcePath -ceq ($bodySource[0].value + '\dead\0\body')) 'wrong-original-ghost-body'
+    Assert-Source ($head[0].frames.Count -eq 1 -and $headFrame.visible -and $headFrame.sourcePath -ceq ($headSource[0].value + '\front\head')) 'wrong-equipped-ghost-head'
     $bodyNode = Resolve-Uol ($data.Find($bodyFrame.sourcePath))
     $headNode = Resolve-Uol ($data.Find($headFrame.sourcePath))
     $nativeNeck = $bodyNode.Nodes['map'].Nodes['neck'].Value
@@ -172,7 +182,7 @@ try {
                 Assert-Source ((Digest $before.metadata) -ceq (Digest $entity.metadata)) 'existing-outfit-and-face-metadata-changed'
                 Assert-Source ((Digest $before.equipment) -ceq (Digest $entity.equipment)) 'existing-equipment-inventory-changed'
                 $replaced = @($result.replaced | Where-Object { $null -ne $_ })
-                Assert-Source ($replaced.Count -eq 0 -or ($result.name -ceq '깽쿤' -and $replaced.Count -eq 1 -and $replaced[0] -ceq 'dead' -and @($result.added) -ccontains 'dead')) 'unsupported-existing-animation-replacement'
+                Assert-Source ($replaced.Count -eq 0 -or ($result.name -cin $DeathCharacterNames -and $replaced.Count -eq 1 -and $replaced[0] -ceq 'dead' -and @($result.added) -ccontains 'dead')) 'unsupported-existing-animation-replacement'
                 for ($index = 0; $index -lt $before.clips.Count; $index++) {
                     if ($before.clips[$index].name -cin $replaced) {
                         Assert-Source ($entity.clips[$index].name -ceq $before.clips[$index].name) 'replaced-animation-index-changed'
@@ -197,7 +207,7 @@ try {
                     foreach ($pose in $track.poses) { if ($pose.visible) { Assert-Source ($assets.ContainsKey($pose.assetId)) 'pose-asset-missing' } }
                 }
                 if ($action -ceq 'dead') {
-                    Assert-Source ($result.name -ceq '깽쿤') 'ghost-action-on-wrong-actor'
+                    Assert-Source ($result.name -cin $DeathCharacterNames) 'ghost-action-on-wrong-actor'
                     Verify-EquippedGhost $clip $entity $assets $result.output $before
                 } elseif ($result.renderingMode -ceq 'illusion-ring') {
                     Assert-Source ($clip.tracks.Count -eq 1 -and $clip.tracks[0].kind -ceq 'body') 'illusion-action-replaced-with-human-layers'
