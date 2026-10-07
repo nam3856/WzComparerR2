@@ -78,6 +78,77 @@ function Verify-RawCanvas($Frame, $Asset, [string]$Directory, $ActionNode) {
     } finally { $original.Dispose(); $exported.Dispose() }
 }
 
+function Metadata-Point($Track, [string]$Key) {
+    $metaRows = @($Track.metadata | Where-Object key -CEQ $Key)
+    Assert-Source ($metaRows.Count -eq 1 -and $metaRows[0].value -match '^-?\d+,-?\d+$') 'native-bone-point-missing-or-ambiguous'
+    $coordinates = $metaRows[0].value.Split(',')
+    return [Drawing.Point]::new([int]$coordinates[0], [int]$coordinates[1])
+}
+
+function Verify-PrismCanvas($Frame, $Asset, [string]$Directory, $Entity, [int]$PrismSlot) {
+    $sourceNode = Resolve-Uol ($data.Find($Frame.sourcePath))
+    $source = Resolve-Canvas $sourceNode
+    $original = $source.Value.ExtractPng()
+    $exported = [Drawing.Bitmap]::new([IO.Path]::Combine($Directory, $Asset.file))
+    $transformed = $null
+    try {
+        $values = @{}
+        foreach ($entry in $Entity.metadata) { $values[$entry.key] = $entry.value }
+        $prefix = 'parts/' + $PrismSlot + '/prism/Default/'
+        $transformed = [WzComparerR2.AvatarCommon.Prism]::Apply($original, [int]$values[$prefix + 'type'], [int]$values[$prefix + 'hue'], [int]$values[$prefix + 'saturation'], [int]$values[$prefix + 'brightness'], $false, [bool]::Parse($values[$prefix + 'convertPureBlack']))
+        Assert-Source ($transformed.Width -eq $exported.Width -and $transformed.Height -eq $exported.Height) 'native-prism-canvas-dimensions-changed'
+        for ($y = 0; $y -lt $transformed.Height; $y++) {
+            for ($x = 0; $x -lt $transformed.Width; $x++) {
+                if ($transformed.GetPixel($x, $y).ToArgb() -ne $exported.GetPixel($x, $y).ToArgb()) { throw 'native-equipped-prism-rgba-changed' }
+            }
+        }
+        $script:checks++; $script:rgbaFrames++
+    } finally {
+        if ($transformed) { $transformed.Dispose() }
+        $original.Dispose(); $exported.Dispose()
+    }
+}
+
+function Verify-EquippedGhost($Clip, $Entity, $Assets, [string]$Directory, $Before) {
+    $body = @($Clip.tracks | Where-Object id -CEQ 'part/0/body/0')
+    $head = @($Clip.tracks | Where-Object id -CEQ 'part/1/head/0')
+    $hair = @($Clip.tracks | Where-Object { $_.id.StartsWith('part/3/hair', [StringComparison]::Ordinal) })
+    $face = @($Clip.tracks | Where-Object id -CEQ 'face/2/face/0')
+    $cap = @($Clip.tracks | Where-Object { $_.id.StartsWith('part/4/', [StringComparison]::Ordinal) })
+    $clock = @($Clip.tracks | Where-Object { $_.id -ceq 'body' -and $_.kind -ceq 'clock' })
+    Assert-Source (!$Clip.loop -and $Clip.durationMs -eq 120 -and $clock.Count -eq 1 -and $clock[0].frames.Count -eq 1 -and $clock[0].frames[0].delayMs -eq 120) 'native-ghost-clock-changed'
+    Assert-Source ($body.Count -eq 1 -and $head.Count -eq 1 -and $hair.Count -gt 0 -and $face.Count -eq 1 -and $cap.Count -gt 0) 'ghost-equipped-head-hair-face-cap-missing'
+    $bodyFrame = $body[0].frames[0]; $headFrame = $head[0].frames[0]
+    Assert-Source ($body[0].frames.Count -eq 1 -and $bodyFrame.visible -and $bodyFrame.sourcePath -ceq 'Character\00002042.img\dead\0\body') 'wrong-original-ghost-body'
+    Assert-Source ($head[0].frames.Count -eq 1 -and $headFrame.visible -and $headFrame.sourcePath -ceq 'Character\00012042.img\front\head') 'wrong-equipped-ghost-head'
+    $bodyNode = Resolve-Uol ($data.Find($bodyFrame.sourcePath))
+    $headNode = Resolve-Uol ($data.Find($headFrame.sourcePath))
+    $nativeNeck = $bodyNode.Nodes['map'].Nodes['neck'].Value
+    $localHeadNeck = $headNode.Nodes['map'].Nodes['neck'].Value
+    $localBrow = $headNode.Nodes['map'].Nodes['brow'].Value
+    $bodyBone = Metadata-Point $body[0] 'frame/0/bonePosition'
+    $headBone = Metadata-Point $head[0] 'frame/0/bonePosition'
+    Assert-Source ($bodyBone.X -eq $nativeNeck.X -and $bodyBone.Y -eq $nativeNeck.Y) 'ghost-native-neck-anchor-changed'
+    Assert-Source ($headBone.X -eq $bodyBone.X - $localHeadNeck.X -and $headBone.Y -eq $bodyBone.Y - $localHeadNeck.Y) 'equipped-head-detached-from-ghost-neck'
+    $headOrigin = $headNode.Nodes['origin'].Value; $bodyOrigin = $bodyNode.Nodes['origin'].Value
+    Assert-Source ($bodyFrame.x - $bodyFrame.originX -eq -$bodyOrigin.X -and $bodyFrame.y - $bodyFrame.originY -eq -$bodyOrigin.Y) 'ghost-body-original-placement-changed'
+    Assert-Source ($headFrame.x - $headFrame.originX -eq $headBone.X - $headOrigin.X -and $headFrame.y - $headFrame.originY -eq $headBone.Y - $headOrigin.Y) 'equipped-head-original-placement-changed'
+    foreach ($track in @($hair + $cap)) {
+        $bone = Metadata-Point $track 'frame/0/bonePosition'
+        Assert-Source ($bone.X -eq $headBone.X + $localBrow.X -and $bone.Y -eq $headBone.Y + $localBrow.Y) 'ghost-hair-or-cap-detached-from-head-brow'
+    }
+    $faceBone = Metadata-Point $face[0] 'pose/0/0/bonePosition'
+    Assert-Source ($faceBone.X -eq $headBone.X + $localBrow.X -and $faceBone.Y -eq $headBone.Y + $localBrow.Y) 'ghost-face-detached-from-head-brow'
+    # Native AvatarCanvas applies the equipped head's prism to body and head.
+    Verify-PrismCanvas $bodyFrame $Assets[$bodyFrame.assetId] $Directory $Entity 1
+    Verify-PrismCanvas $headFrame $Assets[$headFrame.assetId] $Directory $Entity 1
+    if ($Before) {
+        $stand = @($Before.clips | Where-Object name -CEQ 'stand1')[0]
+        $originalHeadAsset = @($stand.tracks | Where-Object id -CEQ 'part/1/head/0')[0].frames[0].assetId
+        Assert-Source ($headFrame.assetId -ceq $originalHeadAsset) 'equipped-head-sprite-or-colour-changed'
+    }
+}
+
 try {
     $data = [Activator]::CreateInstance($reader.GetType('DataSource', $true), @([IO.Path]::GetFullPath($BaseWzPath)))
     foreach ($file in $ResultFile) {
@@ -100,7 +171,15 @@ try {
                 Assert-Source ($before.id -ceq $entity.id -and $before.defaultAction -ceq $entity.defaultAction -and $before.displayName -ceq $entity.displayName) 'existing-actor-identity-or-default-changed'
                 Assert-Source ((Digest $before.metadata) -ceq (Digest $entity.metadata)) 'existing-outfit-and-face-metadata-changed'
                 Assert-Source ((Digest $before.equipment) -ceq (Digest $entity.equipment)) 'existing-equipment-inventory-changed'
-                for ($index = 0; $index -lt $before.clips.Count; $index++) { Assert-Source ((Digest $before.clips[$index]) -ceq (Digest $entity.clips[$index])) 'existing-animation-changed' }
+                $replaced = @($result.replaced | Where-Object { $null -ne $_ })
+                Assert-Source ($replaced.Count -eq 0 -or ($result.name -ceq '깽쿤' -and $replaced.Count -eq 1 -and $replaced[0] -ceq 'dead' -and @($result.added) -ccontains 'dead')) 'unsupported-existing-animation-replacement'
+                for ($index = 0; $index -lt $before.clips.Count; $index++) {
+                    if ($before.clips[$index].name -cin $replaced) {
+                        Assert-Source ($entity.clips[$index].name -ceq $before.clips[$index].name) 'replaced-animation-index-changed'
+                        continue
+                    }
+                    Assert-Source ((Digest $before.clips[$index]) -ceq (Digest $entity.clips[$index])) 'existing-animation-changed'
+                }
                 foreach ($asset in $original.assets) { Assert-Source ($assets.ContainsKey($asset.id)) 'existing-png-removed' }
                 $oldMap = [IO.Path]::Combine($result.input, 'face-variant-map.json')
                 if ([IO.File]::Exists($oldMap)) { Assert-Source ((Get-FileHash -LiteralPath $oldMap).Hash -ceq (Get-FileHash -LiteralPath ([IO.Path]::Combine($result.output, 'face-variant-map.json'))).Hash) 'existing-face-profile-map-changed' }
@@ -118,10 +197,8 @@ try {
                     foreach ($pose in $track.poses) { if ($pose.visible) { Assert-Source ($assets.ContainsKey($pose.assetId)) 'pose-asset-missing' } }
                 }
                 if ($action -ceq 'dead') {
-                    Assert-Source ($result.name -ceq '깽쿤' -and !$clip.loop -and $clip.tracks.Count -eq 1 -and $clip.tracks[0].frames.Count -eq 1) 'ghost-action-has-human-attachments-or-invalid-clock'
-                    $frame = $clip.tracks[0].frames[0]
-                    Assert-Source ($frame.sourcePath -ceq 'Character\00002042.img\dead\0\body') 'wrong-original-ghost-body'
-                    Verify-RawCanvas $frame $assets[$frame.assetId] $result.output $null
+                    Assert-Source ($result.name -ceq '깽쿤') 'ghost-action-on-wrong-actor'
+                    Verify-EquippedGhost $clip $entity $assets $result.output $before
                 } elseif ($result.renderingMode -ceq 'illusion-ring') {
                     Assert-Source ($clip.tracks.Count -eq 1 -and $clip.tracks[0].kind -ceq 'body') 'illusion-action-replaced-with-human-layers'
                     $path = 'Character/Ring/01116126.img/' + $sourceAction

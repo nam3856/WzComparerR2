@@ -4,6 +4,7 @@ param(
     [string]$StoredAnimationSetPath,
     [string]$StoredCharacterName,
     [string[]]$StoredActions = @('walk2'),
+    [switch]$DeathOnly,
     [string]$OutputDirectory,
     [string]$BaseWzPath = 'D:/Nexon/Maple/Data/Base/Base.wz',
     [string]$ReaderAssemblyPath = [IO.Path]::Combine($PSScriptRoot, '../Tests/UnityExportSmoke/bin/Release/net8.0-windows/UnityExportSmoke.dll'),
@@ -99,12 +100,13 @@ function Restore-Avatar($Entity) {
     return $restored
 }
 
-function Assert-OldPreserved($Before, $After, [int]$Count) {
+function Assert-OldPreserved($Before, $After, [int]$Count, [string[]]$ChangedActions = @()) {
     if ($Before.id -cne $After.id -or $Before.defaultAction -cne $After.defaultAction -or $Before.displayName -cne $After.displayName) { throw 'Original character identity/default action changed.' }
     foreach ($property in @('equipment','metadata')) {
         if ([Newtonsoft.Json.JsonConvert]::SerializeObject($Before.$property) -cne [Newtonsoft.Json.JsonConvert]::SerializeObject($After.$property)) { throw 'Original outfit/face metadata changed.' }
     }
     for ($index = 0; $index -lt $Count; $index++) {
+        if ($Before.clips[$index].name -cin $ChangedActions) { continue }
         if ([Newtonsoft.Json.JsonConvert]::SerializeObject($Before.clips[$index]) -cne [Newtonsoft.Json.JsonConvert]::SerializeObject($After.clips[$index])) { throw 'Existing source animation changed.' }
     }
 }
@@ -182,6 +184,7 @@ try {
         foreach ($warning in $original.warnings) { $writer.Warn($warning.sourcePath, $warning.reason) }
         $added = @(); $missing = @(); $appearanceMatched = $false
         $isRing = @($entity.metadata | Where-Object { $_.key -eq 'rendering/mode' -and $_.value -eq 'illusion-ring' }).Count -eq 1
+        if ($DeathOnly -and ($isRing -or $entity.displayName -cne '깽쿤')) { throw 'Death-only correction requires the original Kkaengkun native bundle.' }
         if ($isRing) {
             $rings = @($entity.equipment | Where-Object { $_.illusionRingClassificationKnown -and $_.isIllusionRing -and !$_.isSkill })
             if ($rings.Count -ne 1) { throw 'One verified original illusion ring is required.' }
@@ -213,7 +216,7 @@ try {
             $primary = [Activator]::CreateInstance($exporterType, @($avatar, $null))
             if ($primary.AppearanceId -cne $original.id) { throw 'Restored original outfit identity mismatch.' }
             $appearanceMatched = $true
-            $actions = @('walk1','walk2','jump')
+            $actions = if ($DeathOnly) { @() } else { @('walk1','walk2','jump') }
             $actions = @($actions | Where-Object { if ($avatar.GetActionFrames($_).Length -eq 0) { $missing += $_; $false } else { $true } })
             $baseEmotion = $avatar.EmotionName
             $fixed = @($entity.metadata | Where-Object key -eq 'face/fixedFrame')
@@ -234,33 +237,44 @@ try {
                 }
             }
             if ($entity.displayName -ceq '깽쿤') {
-                # The authored dead sprite is a complete ghost. AvatarCanvas's
-                # ordinary attachment fallbacks would add default head/hair/cap
-                # sprites which do not belong to that original dead canvas.
-                $ghostNode = $data.Find($avatar.Body.Node.FullPathToFile + '/dead/0/body')
-                if (!$ghostNode) { throw 'Original Kkaengkun dead ghost canvas is unavailable.' }
-                $ghost = $readTrack.Invoke($null, @($ghostNode, 'part/0/body/0', $writer, $find, $false))
-                if ($ghost.frames.Count -ne 1) { throw 'Original dead ghost frame count mismatch.' }
-                $ghost.kind = 'body'; $ghost.slot = 'body'; $ghost.itemId = [string]$avatar.Body.ID
-                Add-Meta $ghost.metadata 'sourceAction' 'dead'; Add-Meta $ghost.metadata 'source' $ghostNode.FullPathToFile
-                Add-Meta $ghost.metadata 'frame/0/source' $ghostNode.FullPathToFile
-                Add-Meta $ghost.metadata 'rendering' 'original-complete-ghost; no default head, hair, face or equipment fallbacks'
-                $dead = [Activator]::CreateInstance($entity.clips.GetType().GetGenericArguments()[0])
-                $dead.name = 'dead'; $dead.loop = $false; $dead.durationMs = $ghost.frames[0].delayMs
-                $dead.tracks.Add($ghost); $entity.clips.Add($dead); $added += 'dead'
+                # dead/0/body is the ghost BODY, with an authored neck anchor.
+                # Its face=1 requests the equipped front head, default face and
+                # hair/cap attachments. Use the native bone renderer, including
+                # original mix/prism options, rather than dropping that head.
+                $avatar.EmotionName = $baseEmotion
+                $deadFolder = [IO.Path]::Combine($characterRoot, '.source-variants', 'dead-with-equipped-head')
+                $deadVariant = [Activator]::CreateInstance($exporterType, @($avatar, $null)).Export($deadFolder, [string[]]@('dead'), [Threading.CancellationToken]::None, $null)
+                foreach ($asset in $deadVariant.assets) { if ($writer.AddPngFile((Original-Png $deadFolder $asset)) -cne $asset.id) { throw 'Original dead attachment PNG changed.' } }
+                $dead = $deadVariant.entities[0].clips[0]
+                if ($fixed.Count -eq 1) { $null = $freezeFace.Invoke($null, @($dead, [int]$fixed[0].value)) }
+                $oldDead = @($entity.clips | Where-Object name -CEQ 'dead')
+                if ($oldDead.Count -gt 1 -or (!$DeathOnly -and $oldDead.Count -gt 0)) { throw 'Existing dead action requires an explicit death-only correction.' }
+                if ($DeathOnly -and $oldDead.Count -ne 1) { throw 'Death-only correction requires exactly one existing dead action.' }
+                if ($oldDead.Count -eq 1) { $entity.clips[$entity.clips.IndexOf($oldDead[0])] = $dead } else { $entity.clips.Add($dead) }
+                $added += 'dead'
+                $writePreview = $reader.GetType('KmsAvatarExport', $true).GetMethod('WritePreview', $flags)
+                $previewRows = [Activator]::CreateInstance($writePreview.GetParameters()[6].ParameterType)
+                $previewFolder = [IO.Path]::Combine($characterRoot, 'previews')
+                $null = [IO.Directory]::CreateDirectory($previewFolder)
+                $null = $writePreview.Invoke($null, @($avatar.PSObject.BaseObject, 'dead', $baseEmotion, 0, 'dead-with-equipped-head.png', $previewFolder, $previewRows))
+                [IO.File]::WriteAllText([IO.Path]::Combine($previewFolder, 'dead-original-frame.json'), [Newtonsoft.Json.JsonConvert]::SerializeObject($previewRows, [Newtonsoft.Json.Formatting]::Indented), [Text.UTF8Encoding]::new($false))
             }
             $avatar.ClearSkinCache(); $avatar = $null
         }
-        Assert-OldPreserved $before $entity $oldCount
+        Assert-OldPreserved $before $entity $oldCount $(if ($DeathOnly) { [string[]]@('dead') } else { [string[]]@() })
         if ($entity.displayName -ceq '깽쿤') {
             $dead = @($entity.clips | Where-Object name -eq 'dead')
-            if ($dead.Count -ne 1 -or $dead[0].loop -or $dead[0].tracks.Count -ne 1 -or $dead[0].tracks[0].frames.Count -ne 1 -or !$dead[0].tracks[0].frames[0].sourcePath.EndsWith('/dead/0/body'.Replace('/','\'), [StringComparison]::Ordinal)) { throw 'Original non-looping Kkaengkun-only ghost action is missing.' }
+            $body = @($dead[0].tracks | Where-Object id -CEQ 'part/0/body/0')
+            $head = @($dead[0].tracks | Where-Object id -CEQ 'part/1/head/0')
+            $hair = @($dead[0].tracks | Where-Object { $_.id.StartsWith('part/3/hair', [StringComparison]::Ordinal) })
+            $face = @($dead[0].tracks | Where-Object id -CEQ 'face/2/face/0')
+            if ($dead.Count -ne 1 -or $dead[0].loop -or $body.Count -ne 1 -or $head.Count -ne 1 -or $hair.Count -eq 0 -or $face.Count -ne 1 -or $body[0].frames.Count -ne 1 -or !$body[0].frames[0].sourcePath.EndsWith('/dead/0/body'.Replace('/','\'), [StringComparison]::Ordinal)) { throw 'Original non-looping ghost with equipped head/hair/face is missing.' }
         }
         $writer.Manifest.entities.Add($entity); $null = $writer.Commit()
         $map = [IO.Path]::Combine($input, 'face-variant-map.json')
         if ([IO.File]::Exists($map)) { [IO.File]::Copy($map, [IO.Path]::Combine($output, 'face-variant-map.json'), $false) }
         foreach ($asset in $writer.Manifest.assets) { $null = Original-Png $output $asset }
-        $result = [ordered]@{ name = $entity.displayName; id = $entity.id; input = $input; output = $output; renderingMode = $(if ($isRing) { 'illusion-ring' } else { 'equipment-layers' }); added = @($added); missingNativeActions = @($missing); originalAppearanceMatched = $appearanceMatched; existingClipsUnchanged = $true; outfitMetadataUnchanged = $true; originalAssetsUnchanged = $true; existingClipCount = $oldCount; clipCount = $entity.clips.Count; assetCount = $writer.Manifest.assets.Count }
+        $result = [ordered]@{ name = $entity.displayName; id = $entity.id; input = $input; output = $output; renderingMode = $(if ($isRing) { 'illusion-ring' } else { 'equipment-layers' }); added = @($added); replaced = $(if ($DeathOnly) { @('dead') } else { @() }); missingNativeActions = @($missing); originalAppearanceMatched = $appearanceMatched; existingClipsUnchanged = !$DeathOnly; existingOtherClipsUnchanged = $true; outfitMetadataUnchanged = $true; originalAssetsUnchanged = $true; existingClipCount = $oldCount; clipCount = $entity.clips.Count; assetCount = $writer.Manifest.assets.Count }
         [IO.File]::WriteAllText([IO.Path]::Combine($output, 'travel-motion-provenance.json'), (ConvertTo-Json -InputObject $result -Depth 7), [Text.UTF8Encoding]::new($false))
         $results += $result
         [IO.File]::WriteAllText([IO.Path]::Combine($outputRoot, 'travel-motion-results.json'), (ConvertTo-Json -InputObject @($results) -Depth 7), [Text.UTF8Encoding]::new($false))

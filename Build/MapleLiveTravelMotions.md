@@ -56,11 +56,22 @@ native 120 ms default delay. There are no `walk1` or `walk2` ring actions, so no
 human walking layers or aliases are invented.
 
 깽쿤's original body is `Character/00002042.img`. Its `dead/0/body` resolves to
-`Character/_Canvas/00002000.img/dead/0/body`: a complete 28×28 ghost, origin
+`Character/_Canvas/00002000.img/dead/0/body`: a 28×28 ghost **body**, origin
 (13,27), with the native 120 ms default delay. There is no `die` action. The
-exported non-looping `dead` consists of that original PNG alone, without the
-ordinary AvatarCanvas default head/hair/face/cap fallbacks. SHA-256:
-`ae8909e9b2bee3af27cab3c276a8c0124f6cc3575033e0fd567ab1259c2b9d18`.
+authored `face=1` and body `map/neck=(1,-28)` connect the equipped front head,
+default face, mixed hair and cap through the normal AvatarCanvas bone renderer.
+For 깽쿤 the head bone is `(1,-43)` and its brow bone is `(-3,-48)`. Omitting these
+attachments produced the headless ghost and has been corrected.
+
+The non-looping `dead` preserves the original ghost body, equipped head prism,
+hair mix, cap and original cap effect. Native-render body SHA-256:
+`8c4e42dead80234a5fa0084085c8c4c04f1da0e319652fd1fa2014ff13397d5b`.
+The earlier raw body-only PNG remains preserved as an existing asset, but does
+not replace the normal equipped death appearance. Correct an existing 15-action
+bundle with `-DeathOnly`; it replaces only `dead` at its existing index and
+preserves all other 14 actions, PNGs, outfit metadata and face-map bytes. A native
+reference preview is written beside the merged bundle in
+`previews/dead-with-equipped-head.png`.
 
 ## Current 30-character inventory (2026-10-07)
 
@@ -89,7 +100,7 @@ ordinary AvatarCanvas default head/hair/face/cap fallbacks. SHA-256:
 | 메르세랍니다 | append walk1, walk2, jump and matching blink variants |
 | 코루살껄 | append walk1, walk2, jump and matching blink variants |
 | 란팡 | append walk1, walk2, jump and matching blink variants |
-| 깽쿤 | append walk1, walk2, jump, matching blink variants and original ghost dead |
+| 깽쿤 | append walk1, walk2, jump, matching blink variants and ghost dead with equipped head |
 | 함께하는광이 | append original ring move and jump; no native ring walk1/walk2 |
 | 짱레테짱 | append original ring move and jump; no native ring walk1/walk2 |
 | 묵중 | append original walk2 only; walk1, jump and fly already present |
@@ -113,9 +124,14 @@ Run the read-only source checks against each generated `travel-motion-results.js
 ```
 
 It verifies existing clip/metadata/inventory digests and face-map bytes, every PNG
-hash, source-node availability and original body clocks. Complete ring and ghost
-sprites are compared pixel-for-pixel in RGBA against resolved WZ canvases,
-including dimensions, original origins and action delays. The 2026-10-07 export
-passed 24,711 checks across 27 prepared native actors, 3,118 PNG checks and all
-15 original ring/ghost frame comparisons. This is source verification; Unity
-import, runtime preview and project tests belong to the MapleLive integration.
+hash, source-node availability and original body clocks. Complete ring sprites
+are compared pixel-for-pixel in RGBA against resolved WZ canvases, including
+dimensions, original origins and action delays. Death checks require the native
+neck→head→brow attachments, original positioned head/hair/cap/face, native 120 ms
+clock and exact body/head RGBA after the equipped prism. The original travel
+export passed 24,711 checks across 27 prepared native actors and 3,118 PNG checks;
+the subsequent death-head correction passed 593 checks, preserved all 14 other
+actions and 131 PNGs, and compared both body/head prism results in RGBA. This is
+source verification. The complete 27-actor source set with this correction
+passed 24,357 checks, 3,119 PNG checks and 16 original RGBA frame comparisons.
+Unity import, runtime preview and project tests belong to the MapleLive integration.

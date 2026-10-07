@@ -83,12 +83,17 @@ namespace WzComparerR2.Unity.Editor
                 Require(AssetDatabase.AssetPathToGUID(output) == folderGuid && folderMeta.SequenceEqual(File.ReadAllBytes(output + ".meta")), "First import changed the existing empty folder GUID or metadata.");
                 report.checks.Add("First import accepts a completely empty existing folder and preserves its folder GUID and metadata");
                 var guids = AssetDatabase.FindAssets("", new[] { output }).ToDictionary(guid => AssetDatabase.GUIDToAssetPath(guid), guid => guid);
+                var namedSet = AssetDatabase.LoadAssetAtPath<WzAnimationSet>(guids.Keys.First(path => path.StartsWith(output + "/Animations/", StringComparison.Ordinal) && path.EndsWith(".asset", StringComparison.Ordinal)));
+                namedSet.name = "Authored validation animation";
+                EditorUtility.SetDirty(namedSet);
+                AssetDatabase.SaveAssets();
                 string texturePath = guids.Keys.Single(path => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
                 DateTime textureWritten = File.GetLastWriteTimeUtc(texturePath);
                 File.WriteAllText(output + "/user-notes.txt", "Keep user content");
                 var second = WzUnityImporter.ImportDirectory(fixture);
                 Require(File.GetLastWriteTimeUtc(texturePath) == textureWritten, "Unchanged validated PNG was rewritten instead of reused.");
                 Require(guids.All(pair => AssetDatabase.AssetPathToGUID(pair.Key) == pair.Value), "Reimport changed asset GUIDs.");
+                Require(namedSet.name == "Authored validation animation", "Reimport replaced the authored asset name with an empty temporary name.");
                 Require(File.ReadAllText(output + "/user-notes.txt") == "Keep user content", "Reimport touched user content.");
                 report.checks.Add("Import/reimport keeps asset GUIDs and unrelated user files");
                 var textureImporter = (TextureImporter)AssetImporter.GetAtPath(texturePath);

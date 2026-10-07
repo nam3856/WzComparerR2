@@ -291,7 +291,11 @@ namespace WzComparerR2.Unity.Editor
         {
             var existing = AssetDatabase.LoadAssetAtPath<T>(path);
             if (existing == null) { AssetDatabase.CreateAsset(value, path); return value; }
+            string existingName = existing.name;
             EditorUtility.CopySerialized(value, existing);
+            // Temporary CreateInstance values have no name. Reimport keeps the
+            // authored asset name along with its GUID and external references.
+            existing.name = string.IsNullOrEmpty(existingName) ? Path.GetFileNameWithoutExtension(path) : existingName;
             UnityEngine.Object.DestroyImmediate(value);
             EditorUtility.SetDirty(existing);
             return existing;
